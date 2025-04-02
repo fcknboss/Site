@@ -13,6 +13,23 @@ $escort = $stmt->get_result()->fetch_assoc();
 if (!$escort) {
     die("Acompanhante não encontrada.");
 }
+
+// Calcular média das avaliações
+$stmt = $conn->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE escort_id = ? AND is_approved = 1");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$rating_data = $stmt->get_result()->fetch_assoc();
+$avg_rating = $rating_data['avg_rating'] ? number_format($rating_data['avg_rating'], 1) : 'N/A';
+$review_count = $rating_data['review_count'];
+
+// Verificar se o usuário já avaliou
+$user_review = null;
+if (isset($_SESSION['user_id'])) {
+    $stmt = $conn->prepare("SELECT id, rating, comment FROM reviews WHERE escort_id = ? AND client_id = ?");
+    $stmt->bind_param("ii", $id, $_SESSION['user_id']);
+    $stmt->execute();
+    $user_review = $stmt->get_result()->fetch_assoc();
+}
 ?>
 
 <!DOCTYPE html>
@@ -68,6 +85,7 @@ if (!$escort) {
                 </h1>
                 <p class="location"><?php echo $escort['location']; ?> | <?php echo $escort['age']; ?> anos</p>
                 <p class="rates"><?php echo $escort['rates']; ?></p>
+                <p><strong>Avaliação Média:</strong> <?php echo $avg_rating; ?>/5 (<?php echo $review_count; ?> avaliações)</p>
                 <p><strong>Atendimento:</strong> Com Local, Hotéis e Motéis</p>
                 <p><strong>Pagamento:</strong> Dinheiro, Cartão</p>
                 <div class="social-links">
@@ -129,55 +147,39 @@ if (!$escort) {
         </div>
 
         <div class="profile-section">
-            <!-- Dentro do profile-section de Avaliações -->
-<div class="profile-section">
-    <h2>Avaliações</h2>
-    <div class="review-form">
-        <h3>Deixe sua Avaliação</h3>
-        <div class="star-rating">
-            <span class="star" data-value="1">★</span>
-            <span class="star" data-value="2">★</span>
-            <span class="star" data-value="3">★</span>
-            <span class="star" data-value="4">★</span>
-            <span class="star" data-value="5">★</span>
-        </div>
-        <input type="hidden" id="rating-value" value="0">
-        <textarea id="review-comment" placeholder="Escreva seu comentário..." required></textarea>
-        <button onclick="submitReview(<?php echo $id; ?>)">Enviar Avaliação</button>
-    </div>
-    <div id="reviews-list">
-        <?php
-        $stmt = $conn->prepare("SELECT r.rating, r.comment, u.username FROM reviews r JOIN users u ON r.client_id = u.id WHERE r.escort_id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $reviews = $stmt->get_result();
-        while ($review = $reviews->fetch_assoc()) {
-            echo "<div class='review'>";
-            echo "<p><strong>" . $review['username'] . ":</strong> " . $review['rating'] . "/5</p>";
-            echo "<p>" . $review['comment'] . "</p>";
-            echo "</div>";
-        }
-        ?>
-    </div>
-</div>
             <h2>Avaliações</h2>
-            <?php
-            $stmt = $conn->prepare("SELECT r.rating, r.comment, u.username FROM reviews r JOIN users u ON r.client_id = u.id WHERE r.escort_id = ?");
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-            $reviews = $stmt->get_result();
-            while ($review = $reviews->fetch_assoc()) {
-                echo "<div class='review'>";
-                echo "<p><strong>" . $review['username'] . ":</strong> " . $review['rating'] . "/5</p>";
-                echo "<p>" . $review['comment'] . "</p>";
-                echo "</div>";
-            }
-            
-            ?>
+            <div class="review-form">
+                <h3><?php echo $user_review ? 'Editar sua Avaliação' : 'Deixe sua Avaliação'; ?></h3>
+                <div class="star-rating">
+                    <span class="star" data-value="1">★</span>
+                    <span class="star" data-value="2">★</span>
+                    <span class="star" data-value="3">★</span>
+                    <span class="star" data-value="4">★</span>
+                    <span class="star" data-value="5">★</span>
+                </div>
+                <input type="hidden" id="rating-value" value="<?php echo $user_review ? $user_review['rating'] : 0; ?>">
+                <textarea id="review-comment" placeholder="Escreva seu comentário..." required><?php echo $user_review ? $user_review['comment'] : ''; ?></textarea>
+                <button onclick="submitReview(<?php echo $id; ?>, <?php echo $user_review ? $user_review['id'] : 'null'; ?>)">
+                    <?php echo $user_review ? 'Atualizar Avaliação' : 'Enviar Avaliação'; ?>
+                </button>
+            </div>
+            <div id="reviews-list">
+                <?php
+                $stmt = $conn->prepare("SELECT r.id, r.rating, r.comment, u.username FROM reviews r JOIN users u ON r.client_id = u.id WHERE r.escort_id = ? AND r.is_approved = 1");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                $reviews = $stmt->get_result();
+                while ($review = $reviews->fetch_assoc()) {
+                    echo "<div class='review' data-id='" . $review['id'] . "'>";
+                    echo "<p><strong>" . $review['username'] . ":</strong> " . $review['rating'] . "/5</p>";
+                    echo "<p>" . $review['comment'] . "</p>";
+                    echo "</div>";
+                }
+                ?>
+            </div>
         </div>
     </div>
 
-    <!-- Lightbox -->
     <div id="lightbox" class="lightbox">
         <span class="close-lightbox" onclick="closeLightbox()">×</span>
         <img id="lightbox-img" src="">

@@ -1,7 +1,3 @@
-<?php 
-include 'check_session.php';
-include 'config.php';
-?>
 <?php
 session_start();
 include 'config.php';
@@ -10,14 +6,20 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     if (isset($_POST['username']) && isset($_POST['password'])) {
         $username = $_POST['username'];
         $password = $_POST['password'];
-        $stmt = $conn->prepare("SELECT role, id FROM users WHERE username = ? AND password = ?");
-        $stmt->bind_param("ss", $username, $password);
+        $stmt = $conn->prepare("SELECT id, role, password FROM users WHERE username = ?");
+        $stmt->bind_param("s", $username);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($row = $result->fetch_assoc()) {
-            $_SESSION['role'] = $row['role'];
-            $_SESSION['user_id'] = $row['id'];
+            if (password_verify($password, $row['password'])) {
+                $_SESSION['user_id'] = $row['id'];
+                $_SESSION['role'] = $row['role'];
+                $_SESSION['last_activity'] = time();
+                header("Location: index.php");
+                exit;
+            }
         }
+        $error = "Usuário ou senha inválidos.";
     }
     if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
         echo '<form method="post">
@@ -50,7 +52,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
         <div class="top-right">
             <a href="index.php">Home</a>
             <a href="admin.php">Admin</a>
-            <a href="#">Sair</a>
+            <a href="logout.php">Sair</a>
         </div>
     </div>
 
@@ -92,40 +94,33 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                 <div id="additional-preview" class="photo-preview"></div>
                 <button type="submit">Cadastrar</button>
             </form>
+
+            <h1>Aprovar Avaliações</h1>
+            <div class="reviews-pending">
+                <?php
+                $stmt = $conn->prepare("SELECT r.id, r.rating, r.comment, u.username, e.name 
+                                        FROM reviews r 
+                                        JOIN users u ON r.client_id = u.id 
+                                        JOIN escorts e ON r.escort_id = e.id 
+                                        WHERE r.is_approved = 0");
+                $stmt->execute();
+                $pending_reviews = $stmt->get_result();
+                while ($review = $pending_reviews->fetch_assoc()) {
+                    echo "<div class='pending-review' data-id='" . $review['id'] . "'>";
+                    echo "<p><strong>" . $review['username'] . " sobre " . $review['name'] . ":</strong> " . $review['rating'] . "/5</p>";
+                    echo "<p>" . $review['comment'] . "</p>";
+                    echo "<button onclick='approveReview(" . $review['id'] . ")'>Aprovar</button>";
+                    echo "</div>";
+                }
+                ?>
+            </div>
         </div>
         <div class="right-sidebar">
             <h3>Dicas</h3>
             <p>Preencha todos os campos e adicione até 5 fotos adicionais.</p>
         </div>
     </div>
-    <script>
-        function previewProfilePhoto(event) {
-            const preview = document.getElementById('profile-preview');
-            preview.innerHTML = '';
-            const file = event.target.files[0];
-            if (file) {
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(file);
-                img.style.maxWidth = '200px';
-                img.style.maxHeight = '250px';
-                preview.appendChild(img);
-            }
-        }
-
-        function previewAdditionalPhotos(event) {
-            const preview = document.getElementById('additional-preview');
-            preview.innerHTML = '';
-            const files = event.target.files;
-            for (let i = 0; i < Math.min(files.length, 5); i++) {
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(files[i]);
-                img.style.maxWidth = '150px';
-                img.style.maxHeight = '200px';
-                img.style.margin = '5px';
-                preview.appendChild(img);
-            }
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
 <?php $conn->close(); ?>

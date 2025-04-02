@@ -33,6 +33,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS escorts (
     availability VARCHAR(255),
     profile_photo VARCHAR(100),
     type ENUM('acompanhante', 'criadora') DEFAULT 'acompanhante',
+    is_online TINYINT(1) DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
 )");
 
@@ -59,7 +60,8 @@ $conn->query("CREATE TABLE IF NOT EXISTS reviews (
     client_id INT,
     rating INT,
     comment TEXT,
-    date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_approved TINYINT(1) DEFAULT 0,
     FOREIGN KEY (escort_id) REFERENCES escorts(id),
     FOREIGN KEY (client_id) REFERENCES users(id)
 )");
@@ -109,9 +111,9 @@ $conn->query("INSERT INTO users (username, password, email, role)
            ('admin', '" . password_hash('admin123', PASSWORD_DEFAULT) . "', 'admin@example.com', 'admin'),
            ('luna_content', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'luna@example.com', 'escort')");
 
-$conn->query("INSERT INTO escorts (user_id, name, age, location, description, services, rates, availability, profile_photo, type) 
-    VALUES (1, 'Ana', 25, 'São Paulo', 'Acompanhante simpática e divertida', 'Companhia, eventos', 'R$200/h', 'Seg-Sex, 18h-23h', 'uploads/ana.jpg', 'acompanhante'),
-           (4, 'Luna', 28, 'Rio de Janeiro', 'Criadora de conteúdo e companhia', 'Fotos, vídeos, eventos', 'R$300/h', 'Ter-Qui, 14h-20h', 'uploads/luna.jpg', 'criadora')");
+$conn->query("INSERT INTO escorts (user_id, name, age, location, description, services, rates, availability, profile_photo, type, is_online) 
+    VALUES (1, 'Ana', 25, 'São Paulo', 'Acompanhante simpática e divertida', 'Companhia, eventos', 'R$200/h', 'Seg-Sex, 18h-23h', 'uploads/ana.jpg', 'acompanhante', 1),
+           (4, 'Luna', 28, 'Rio de Janeiro', 'Criadora de conteúdo e companhia', 'Fotos, vídeos, eventos', 'R$300/h', 'Ter-Qui, 14h-20h', 'uploads/luna.jpg', 'criadora', 0)");
 
 $conn->query("INSERT INTO photos (escort_id, photo_path) 
     VALUES (1, 'uploads/ana1.jpg'), (1, 'uploads/ana2.jpg'), 
@@ -120,8 +122,8 @@ $conn->query("INSERT INTO photos (escort_id, photo_path)
 $conn->query("INSERT INTO scraps (escort_id, client_id, message) 
     VALUES (1, 2, 'Oi Ana, adorei seu perfil!')");
 
-$conn->query("INSERT INTO reviews (escort_id, client_id, rating, comment) 
-    VALUES (1, 2, 5, 'Excelente companhia, super recomendo!')");
+$conn->query("INSERT INTO reviews (escort_id, client_id, rating, comment, is_approved) 
+    VALUES (1, 2, 5, 'Excelente companhia, super recomendo!', 1)");
 
 $conn->query("INSERT INTO posts (user_id, content) 
     VALUES (1, 'Disponível hoje à noite em SP!'), 

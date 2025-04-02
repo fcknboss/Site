@@ -625,3 +625,25 @@ body {
     padding: 10px;
     margin-bottom: 10px;
 }
+/* ... (estilos anteriores mantidos) ... */
+
+.reviews-pending {
+    margin-top: 20px;
+}
+
+.pending-review {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    border: 1px solid #B4D1EC;
+}
+
+.pending-review button {
+    padding: 5px 10px;
+    background-color: #E95B95;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}

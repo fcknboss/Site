@@ -1,3 +1,82 @@
+function approveReview(reviewId) {
+    fetch('approve_review.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `review_id=${reviewId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const reviewDiv = document.querySelector(`.pending-review[data-id="${reviewId}"]`);
+            reviewDiv.remove(); // Remove da lista de pendentes
+            // Aqui poderia atualizar a página de perfil via AJAX se estivesse aberta
+            alert('Avaliação aprovada!');
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+// ... (outras funções mantidas) ...
+function setRating(value) {
+    const stars = document.querySelectorAll('.star');
+    stars.forEach(star => {
+        star.classList.remove('active');
+        if (parseInt(star.getAttribute('data-value')) <= value) {
+            star.classList.add('active');
+        }
+    });
+    document.getElementById('rating-value').value = value;
+}
+
+document.querySelectorAll('.star').forEach(star => {
+    star.addEventListener('click', () => setRating(parseInt(star.getAttribute('data-value'))));
+});
+
+function submitReview(escortId, reviewId = null) {
+    const rating = document.getElementById('rating-value').value;
+    const comment = document.getElementById('review-comment').value;
+    if (rating > 0 && comment) {
+        const url = reviewId ? 'edit_review.php' : 'add_review.php';
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `escort_id=${escortId}&rating=${rating}&comment=${encodeURIComponent(comment)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const reviewsList = document.getElementById('reviews-list');
+                if (reviewId) {
+                    const reviewDiv = reviewsList.querySelector(`.review[data-id="${data.review_id}"]`);
+                    reviewDiv.innerHTML = `
+                        <p><strong>${data.review.username}:</strong> ${data.review.rating}/5</p>
+                        <p>${data.review.comment}</p>
+                    `;
+                } else {
+                    const review = document.createElement('div');
+                    review.className = 'review';
+                    review.dataset.id = data.review_id;
+                    review.innerHTML = `
+                        <p><strong>${data.review.username}:</strong> ${data.review.rating}/5</p>
+                        <p>${data.review.comment}</p>
+                    `;
+                    reviewsList.insertBefore(review, reviewsList.firstChild);
+                }
+                document.getElementById('review-comment').value = '';
+                setRating(0);
+                document.querySelector('.review-form h3').textContent = 'Editar sua Avaliação';
+                document.querySelector('.review-form button').textContent = 'Atualizar Avaliação';
+            } else {
+                alert(data.message);
+            }
+        });
+    } else {
+        alert('Por favor, selecione uma nota e escreva um comentário.');
+    }
+}
+
+// ... REVIEW ...
 function setRating(value) {
     const stars = document.querySelectorAll('.star');
     stars.forEach(star => {
