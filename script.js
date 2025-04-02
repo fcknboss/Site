@@ -1,30 +1,41 @@
 function submitPost() {
     const content = document.getElementById('post-content').value;
     if (content) {
-        const feed = document.getElementById('feed');
-        const post = document.createElement('div');
-        post.className = 'post';
-        const timestamp = new Date().toLocaleString();
-        post.innerHTML = `
-            <div class="post-header">
-                <img src="uploads/default.jpg" alt="Foto">
-                <div>
-                    <h4>Você</h4>
-                    <small>${timestamp}</small>
-                </div>
-            </div>
-            <p>${content}</p>
-            <div class="post-actions">
-                <button onclick="likePost(this)" data-likes="0">Curtir (0)</button>
-                <button onclick="showComment(this)">Comentar</button>
-            </div>
-            <div class="comments"></div>
-        `;
-        feed.insertBefore(post, feed.firstChild);
-        document.getElementById('post-content').value = '';
+        fetch('add_post.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `content=${encodeURIComponent(content)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const feed = document.getElementById('feed');
+                const post = document.createElement('div');
+                post.className = 'post';
+                post.id = `post-${data.post.id}`;
+                post.innerHTML = `
+                    <div class="another-post-header">
+                        <img src="${data.post.profile_photo || 'uploads/default.jpg'}" alt="Foto">
+                        <div>
+                            <h4>${data.post.username}</h4>
+                            <small>${data.post.timestamp}</small>
+                        </div>
+                    </div>
+                    <p>${data.post.content}</p>
+                    <div class="post-actions">
+                        <button onclick="likePost(${data.post.id})" data-likes="0">Curtir (0)</button>
+                        <button onclick="showComment(${data.post.id})">Comentar</button>
+                    </div>
+                    <div class="comments" id="comments-${data.post.id}"></div>
+                `;
+                feed.insertBefore(post, feed.firstChild);
+                document.getElementById('post-content').value = '';
+            } else {
+                alert(data.message);
+            }
+        });
     }
 }
-
 function likePost(postId) {
     if (typeof postId !== 'number') {
         postId = parseInt(postId.parentElement.parentElement.id.split('-')[1]);
