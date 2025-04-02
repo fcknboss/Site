@@ -647,3 +647,28 @@ body {
     border-radius: 5px;
     cursor: pointer;
 }
+/* ... (estilos anteriores mantidos) ... */
+
+.reviews-approval {
+    margin-top: 20px;
+}
+
+.review-pending {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.review-pending p {
+    margin: 5px 0;
+}
+
+.review-pending button {
+    padding: 5px 10px;
+    background-color: #28A745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}

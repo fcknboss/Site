@@ -7,15 +7,15 @@ function approveReview(reviewId) {
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
-            const reviewDiv = document.querySelector(`.pending-review[data-id="${reviewId}"]`);
-            reviewDiv.remove(); // Remove da lista de pendentes
-            // Aqui poderia atualizar a página de perfil via AJAX se estivesse aberta
-            alert('Avaliação aprovada!');
+            const reviewDiv = document.querySelector(`.review-pending button[onclick='approveReview(${reviewId})']`).parentElement;
+            reviewDiv.remove();
         } else {
             alert(data.message);
         }
     });
 }
+
+// ... (outras funções mantidas: setRating, submitReview, editReview, etc.) ...
 
 // ... (outras funções mantidas) ...
 function setRating(value) {
@@ -37,7 +37,7 @@ function submitReview(escortId, reviewId = null) {
     const rating = document.getElementById('rating-value').value;
     const comment = document.getElementById('review-comment').value;
     if (rating > 0 && comment) {
-        const url = reviewId ? 'edit_review.php' : 'add_review.php';
+        const url = reviewId ? 'update_review.php' : 'add_review.php';
         fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

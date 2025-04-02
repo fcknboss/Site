@@ -4,15 +4,13 @@ $user = 'root';
 $pass = '';
 $dbname = 'eskort';
 
-// Conectar ao MySQL
 $conn = new mysqli($host, $user, $pass);
 if ($conn->connect_error) die("Erro de conexão: " . $conn->connect_error);
 
-// Criar banco de dados
 $conn->query("CREATE DATABASE IF NOT EXISTS $dbname");
 $conn->select_db($dbname);
 
-// Criar tabelas
+// Criar tabelas (atualizando reviews com is_approved)
 $conn->query("CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50),
@@ -60,7 +58,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS reviews (
     client_id INT,
     rating INT,
     comment TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    date DATETIME DEFAULT CURRENT_TIMESTAMP,
     is_approved TINYINT(1) DEFAULT 0,
     FOREIGN KEY (escort_id) REFERENCES escorts(id),
     FOREIGN KEY (client_id) REFERENCES users(id)
@@ -104,7 +102,6 @@ $conn->query("CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (sender_id) REFERENCES users(id)
 )");
 
-// Inserir dados de exemplo com senhas hash
 $conn->query("INSERT INTO users (username, password, email, role) 
     VALUES ('ana_escort', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'ana@example.com', 'escort'), 
            ('joao_client', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'joao@example.com', 'client'),
