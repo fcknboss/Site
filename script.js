@@ -1,3 +1,24 @@
+function sendMessage(event, id) {
+    event.preventDefault();
+    const content = document.getElementById('contact-message').value;
+    if (content) {
+        fetch('send_message.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `escort_id=${id}&content=${encodeURIComponent(content)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            const responseDiv = document.getElementById('contact-response');
+            responseDiv.innerHTML = `<p class="${data.status === 'success' ? 'success' : 'error'}">${data.message}</p>`;
+            if (data.status === 'success') {
+                document.getElementById('contact-message').value = '';
+            }
+        });
+    }
+}
+
+// ... (outras funções como deleteEscort, confirmDelete, closeConfirm, etc.) ...
 function validateAndSendMessage(event, id) {
     event.preventDefault();
     const message = document.getElementById('contact-message').value.trim();

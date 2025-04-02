@@ -707,3 +707,27 @@ body {
         height: 60px;
     }
 }
+/* ... (estilos anteriores mantidos) ... */
+
+/* Footer */
+.footer {
+    background-color: #89B1D6;
+    padding: 20px;
+    text-align: center;
+    color: white;
+    margin-top: 20px;
+}
+
+.footer p {
+    margin: 0 0 10px;
+}
+
+.footer-links a {
+    color: white;
+    text-decoration: none;
+    margin: 0 10px;
+}
+
+.footer-links a:hover {
+    color: #F6ECB2;
+}

@@ -15,18 +15,11 @@ if (!$escort) {
     die("Acompanhante não encontrada.");
 }
 
-// Calcula média de avaliações aprovadas com cache simples
-$cache_file = "cache/reviews_$id.json";
-$cache_duration = 300; // 5 minutos
-if (file_exists($cache_file) && (time() - filemtime($cache_file) < $cache_duration)) {
-    $rating_data = json_decode(file_get_contents($cache_file), true);
-} else {
-    $stmt = $conn->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE escort_id = ? AND is_approved = 1");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $rating_data = $stmt->get_result()->fetch_assoc();
-    file_put_contents($cache_file, json_encode($rating_data));
-}
+// Calcula média de avaliações aprovadas
+$stmt = $conn->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE escort_id = ? AND is_approved = 1");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$rating_data = $stmt->get_result()->fetch_assoc();
 $avg_rating = $rating_data['avg_rating'] ? number_format($rating_data['avg_rating'], 1) : 'N/A';
 $review_count = $rating_data['review_count'];
 
@@ -45,6 +38,8 @@ $user_review = $stmt->get_result()->fetch_assoc();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($escort['name']); ?> - Eskort</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="preload" href="style.css" as="style">
+    <link rel="preload" href="script.js" as="script">
 </head>
 <body>
     <?php include 'header.php'; ?>
@@ -139,7 +134,7 @@ $user_review = $stmt->get_result()->fetch_assoc();
 
         <section class="profile-section">
             <h2>Contato</h2>
-            <form id="contact-form" onsubmit="return validateAndSendMessage(event, <?php echo $id; ?>);">
+            <form id="contact-form" onsubmit="sendMessage(event, <?php echo $id; ?>); return false;">
                 <textarea id="contact-message" placeholder="Envie uma mensagem..." required aria-label="Mensagem"></textarea>
                 <button type="submit">Enviar</button>
             </form>
@@ -148,19 +143,7 @@ $user_review = $stmt->get_result()->fetch_assoc();
 
         <section class="profile-section">
             <h2>Avaliações</h2>
-            <div class="review-form">
-                <h3><?php echo $user_review ? 'Edite sua Avaliação' : 'Deixe sua Avaliação'; ?></h3>
-                <div class="star-rating">
-                    <?php for ($i = 1; $i <= 5; $i++): ?>
-                        <span class="star" data-value="<?php echo $i; ?>" <?php if ($user_review && $i <= $user_review['rating']) echo 'class="active"'; ?>>★</span>
-                    <?php endfor; ?>
-                </div>
-                <input type="hidden" id="rating-value" value="<?php echo $user_review ? $user_review['rating'] : 0; ?>">
-                <textarea id="review-comment" placeholder="Escreva seu comentário..." required><?php echo $user_review ? htmlspecialchars($user_review['comment']) : ''; ?></textarea>
-                <button onclick="submitReview(<?php echo $id; ?>, <?php echo $user_review ? 'true' : 'false'; ?>)">
-                    <?php echo $user_review ? 'Atualizar Avaliação' : 'Enviar Avaliação'; ?>
-                </button>
-            </div>
+            <?php include 'review-form.php'; ?>
             <div id="reviews-list">
                 <?php
                 $stmt = $conn->prepare("SELECT r.rating, r.comment, u.username, r.client_id 
@@ -199,6 +182,8 @@ $user_review = $stmt->get_result()->fetch_assoc();
             </div>
         </div>
     </div>
+
+    <?php include 'footer.php'; ?>
 
     <script src="script.js"></script>
 </body>
