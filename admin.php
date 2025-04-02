@@ -1,3 +1,7 @@
+<?php 
+include 'check_session.php';
+include 'config.php';
+?>
 <?php
 session_start();
 include 'config.php';

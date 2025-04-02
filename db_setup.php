@@ -92,12 +92,22 @@ $conn->query("CREATE TABLE IF NOT EXISTS comments (
     FOREIGN KEY (user_id) REFERENCES users(id)
 )");
 
-// Inserir dados de exemplo
+$conn->query("CREATE TABLE IF NOT EXISTS messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    escort_id INT,
+    sender_id INT,
+    content TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (escort_id) REFERENCES escorts(id),
+    FOREIGN KEY (sender_id) REFERENCES users(id)
+)");
+
+// Inserir dados de exemplo com senhas hash
 $conn->query("INSERT INTO users (username, password, email, role) 
-    VALUES ('ana_escort', '123', 'ana@example.com', 'escort'), 
-           ('joao_client', '123', 'joao@example.com', 'client'),
-           ('admin', 'admin123', 'admin@example.com', 'admin'),
-           ('luna_content', '123', 'luna@example.com', 'escort')");
+    VALUES ('ana_escort', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'ana@example.com', 'escort'), 
+           ('joao_client', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'joao@example.com', 'client'),
+           ('admin', '" . password_hash('admin123', PASSWORD_DEFAULT) . "', 'admin@example.com', 'admin'),
+           ('luna_content', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'luna@example.com', 'escort')");
 
 $conn->query("INSERT INTO escorts (user_id, name, age, location, description, services, rates, availability, profile_photo, type) 
     VALUES (1, 'Ana', 25, 'São Paulo', 'Acompanhante simpática e divertida', 'Companhia, eventos', 'R$200/h', 'Seg-Sex, 18h-23h', 'uploads/ana.jpg', 'acompanhante'),

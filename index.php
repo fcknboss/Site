@@ -1,4 +1,8 @@
 <?php 
+include 'check_session.php';
+include 'config.php';
+?>
+<?php 
 include 'config.php';
 session_start();
 
@@ -7,6 +11,12 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 ?>
+
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<!-- Restante do código igual ao anterior -->
+
 
 <!DOCTYPE html>
 <html lang="pt-BR">
