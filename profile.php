@@ -91,8 +91,16 @@ $user_review = $stmt->get_result()->fetch_assoc();
                 <button>Reservar</button>
                 <?php if ($_SESSION['role'] === 'admin'): ?>
                     <div class="profile-actions">
-                        <a href="edit_escort.php?id=<?php echo $id; ?>" class="edit-btn">Editar</a>
-                        <button onclick="deleteEscort(<?php echo $id; ?>)" class="delete-btn">Excluir</button>
+                        <a href="edit_escort.php?id=<?php echo $id; ?>" class="edit-btn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25ZM20.71 7.04C21.1 6.65 21.1 6.02 20.71 5.63L18.37 3.29C17.98 2.9 17.35 2.9 16.96 3.29L15.13 5.12L18.88 8.87L20.71 7.04Z" fill="white"/>
+                            </svg>
+                        </a>
+                        <button onclick="deleteEscort(<?php echo $id; ?>)" class="delete-btn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19ZM19 4H15.5L14.5 3H9.5L8.5 4H5V6H19V4Z" fill="white"/>
+                            </svg>
+                        </button>
                     </div>
                 <?php endif; ?>
             </div>
@@ -189,6 +197,18 @@ $user_review = $stmt->get_result()->fetch_assoc();
         <span class="close-lightbox" onclick="closeLightbox()">×</span>
         <img id="lightbox-img" src="">
     </div>
+    
+<!-- Após o </div> do lightbox -->
+<div id="confirm-delete" class="confirm-popup">
+    <div class="confirm-content">
+        <h3>Confirmar Exclusão</h3>
+        <p>Tem certeza que deseja excluir o perfil de <?php echo $escort['name']; ?>? Esta ação não pode ser desfeita.</p>
+        <div class="confirm-buttons">
+            <button onclick="confirmDelete(<?php echo $id; ?>)">Sim, Excluir</button>
+            <button onclick="closeConfirm()">Cancelar</button>
+        </div>
+    </div>
+</div>
 
     <script src="script.js"></script>
 </body>
