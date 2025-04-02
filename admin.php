@@ -60,7 +60,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
         </div>
         <div class="main-content">
             <h1>Cadastrar Novo Acompanhante</h1>
-            <form action="add_escort.php" method="post" enctype="multipart/form-data" class="admin-form">
+            <form action="add_escort.php" method="post" enctype="multipart/form-data" class="admin-form" id="admin-form">
                 <label>Nome:</label>
                 <input type="text" name="name" required>
                 <label>Idade:</label>
@@ -81,9 +81,11 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                     <option value="criadora">Criadora de Conteúdo</option>
                 </select>
                 <label>Foto de Perfil:</label>
-                <input type="file" name="profile_photo" accept="image/*" required>
+                <input type="file" name="profile_photo" id="profile-photo" accept="image/*" required onchange="previewProfilePhoto(event)">
+                <div id="profile-preview" class="photo-preview"></div>
                 <label>Fotos Adicionais (máximo 5):</label>
-                <input type="file" name="additional_photos[]" accept="image/*" multiple>
+                <input type="file" name="additional_photos[]" id="additional-photos" accept="image/*" multiple onchange="previewAdditionalPhotos(event)">
+                <div id="additional-preview" class="photo-preview"></div>
                 <button type="submit">Cadastrar</button>
             </form>
         </div>
@@ -92,6 +94,34 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
             <p>Preencha todos os campos e adicione até 5 fotos adicionais.</p>
         </div>
     </div>
+    <script>
+        function previewProfilePhoto(event) {
+            const preview = document.getElementById('profile-preview');
+            preview.innerHTML = '';
+            const file = event.target.files[0];
+            if (file) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.style.maxWidth = '200px';
+                img.style.maxHeight = '250px';
+                preview.appendChild(img);
+            }
+        }
+
+        function previewAdditionalPhotos(event) {
+            const preview = document.getElementById('additional-preview');
+            preview.innerHTML = '';
+            const files = event.target.files;
+            for (let i = 0; i < Math.min(files.length, 5); i++) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(files[i]);
+                img.style.maxWidth = '150px';
+                img.style.maxHeight = '200px';
+                img.style.margin = '5px';
+                preview.appendChild(img);
+            }
+        }
+    </script>
 </body>
 </html>
 <?php $conn->close(); ?>
