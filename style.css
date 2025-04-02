@@ -1,7 +1,9 @@
+/* Reset básico e configuração global */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     background-color: #E2E8FD;
+    color: #333;
 }
 
 /* Topo estilo Facebook com cores do Orkut */
@@ -29,14 +31,20 @@ body {
     border-radius: 5px;
 }
 
-.top-center button {
+.top-center button,
+.post-form button,
+.post-actions button,
+.profile-info button,
+.review-pending button,
+.confirm-buttons button,
+.admin-form button {
     padding: 8px 15px;
     background-color: #E95B95;
     color: white;
     border: none;
     border-radius: 5px;
-    margin-left: 10px;
     cursor: pointer;
+    margin: 0 10px 0 0; /* Padronização de margem */
 }
 
 .top-right a {
@@ -49,7 +57,7 @@ body {
     color: #F6ECB2;
 }
 
-/* Container para páginas com barras laterais */
+/* Container principal */
 .container {
     display: flex;
     max-width: 1200px;
@@ -57,14 +65,17 @@ body {
     padding: 20px;
 }
 
-.sidebar {
+/* Sidebar genérico */
+.sidebar,
+.right-sidebar {
     width: 20%;
     background-color: #B4D1EC;
     padding: 20px;
     border-radius: 5px;
 }
 
-.sidebar ul {
+.sidebar ul,
+.right-sidebar ul {
     list-style: none;
     padding: 0;
 }
@@ -86,7 +97,7 @@ body {
     padding: 0 20px;
 }
 
-/* Seção de Perfis na index.php */
+/* Seção de Perfis */
 .profiles-section {
     background-color: white;
     padding: 15px;
@@ -94,7 +105,10 @@ body {
     margin-bottom: 20px;
 }
 
-.profiles-section h3 {
+.profiles-section h3,
+.profile-section h2,
+.review-form h3,
+.confirm-content h3 {
     color: #E95B95;
     margin: 0 0 15px;
 }
@@ -129,31 +143,25 @@ body {
     color: #E95B95;
 }
 
-/* Mural na index.php */
-.post-form, .feed {
+/* Mural */
+.post-form,
+.feed {
     background-color: white;
     padding: 15px;
     border-radius: 5px;
     margin-bottom: 20px;
 }
 
-.post-form textarea {
+.post-form textarea,
+#review-comment,
+.admin-form textarea {
     width: 100%;
-    height: 60px;
+    height: 80px;
     border: 1px solid #89B1D6;
     border-radius: 5px;
     padding: 10px;
     resize: none;
-}
-
-.post-form button, .post-actions button {
-    padding: 8px 15px;
-    background-color: #E95B95;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-right: 10px;
+    margin-bottom: 10px;
 }
 
 .post {
@@ -161,25 +169,24 @@ body {
     padding: 15px 0;
 }
 
-.post-header {
+.another-post-header {
     display: flex;
     align-items: center;
     margin-bottom: 10px;
 }
 
-.post-header img {
+.another-post-header img {
     width: 40px;
     height: 40px;
     border-radius: 50%;
     margin-right: 10px;
 }
 
-.post-header h4 {
+.another-post-header h4 {
     margin: 0;
-    color: #333;
 }
 
-.post-header small {
+.another-post-header small {
     color: #666;
 }
 
@@ -196,19 +203,7 @@ body {
     padding-left: 20px;
 }
 
-.right-sidebar {
-    width: 20%;
-    background-color: #B4D1EC;
-    padding: 20px;
-    border-radius: 5px;
-}
-
-.right-sidebar ul {
-    list-style: none;
-    padding: 0;
-}
-
-/* Perfil estilo LinkedIn */
+/* Perfil */
 .profile-container {
     max-width: 800px;
     margin: 80px auto 20px;
@@ -224,6 +219,10 @@ body {
     margin-bottom: 20px;
 }
 
+.profile-photo-container {
+    display: inline-block;
+}
+
 .profile-header img {
     width: 200px;
     height: 250px;
@@ -233,21 +232,31 @@ body {
     margin-right: 20px;
 }
 
+.profile-info {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    width: calc(100% - 220px);
+}
+
 .profile-info h1 {
     margin: 0;
-    color: #333;
     font-size: 28px;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
 }
 
-.profile-info .verified, .profile-info .acompanhante, .profile-info .criadora {
+.profile-info .verified,
+.profile-info .acompanhante,
+.profile-info .criadora {
     margin-left: 10px;
     display: inline-block;
 }
 
-.profile-info .verified svg, .profile-info .acompanhante svg, .profile-info .criadora svg {
+.profile-info .verified svg,
+.profile-info .acompanhante svg,
+.profile-info .criadora svg {
     width: 20px;
     height: 20px;
 }
@@ -281,16 +290,6 @@ body {
     color: #F6ECB2;
 }
 
-.profile-info button {
-    padding: 10px 20px;
-    background-color: #E95B95;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-top: 10px;
-}
-
 .profile-section {
     background-color: white;
     padding: 20px;
@@ -298,23 +297,16 @@ body {
     margin-bottom: 20px;
 }
 
-.profile-section h2 {
-    color: #E95B95;
-    margin: 0 0 15px;
-    font-size: 22px;
-}
-
 .profile-section p {
     margin: 10px 0;
-    color: #333;
 }
 
-.scrap, .review {
+.review {
     border-bottom: 1px solid #B4D1EC;
     padding: 10px 0;
 }
 
-.scrap:last-child, .review:last-child {
+.review:last-child {
     border-bottom: none;
 }
 
@@ -323,234 +315,6 @@ body {
     flex-wrap: wrap;
     gap: 10px;
 }
-
-.photo-gallery img {
-    width: 150px;
-    height: 200px;
-    object-fit: cover;
-    border-radius: 5px;
-    border: 1px solid #B4D1EC;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-/* Admin Form */
-.admin-form {
-    background-color: white;
-    padding: 20px;
-    border-radius: 5px;
-}
-
-.admin-form label {
-    display: block;
-    margin: 10px 0 5px;
-    color: #333;
-}
-
-.admin-form input, .admin-form textarea, .admin-form select {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #89B1D6;
-    border-radius: 5px;
-    margin-bottom: 15px;
-}
-
-.admin-form textarea {
-    height: 100px;
-}
-
-.photo-preview {
-    margin: 10px 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.login-container {
-    max-width: 400px;
-    margin: 100px auto;
-    padding: 20px;
-    background-color: white;
-    border-radius: 5px;
-    text-align: center;
-}
-
-.login-container h1 {
-    color: #E95B95;
-    margin-bottom: 20px;
-}
-
-.login-container label {
-    display: block;
-    margin: 10px 0 5px;
-    color: #333;
-}
-
-.login-container input {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #89B1D6;
-    border-radius: 5px;
-    margin-bottom: 15px;
-}
-
-.login-container button {
-    padding: 10px 20px;
-    background-color: #E95B95;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.filters {
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.filters label {
-    color: #333;
-}
-
-.filters input, .filters select {
-    padding: 8px;
-    border: 1px solid #89B1D6;
-    border-radius: 5px;
-}
-
-.filters button {
-    padding: 8px 15px;
-    background-color: #E95B95;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-/* Correção para evitar conflito com post-header */
-.another-post-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.another-post-header img {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    margin-right: 10px;
-}
-
-.another-post-header h4 {
-    margin: 0;
-    color: #333;
-}
-
-.another-post-header small {
-    color: #666;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.carousel {
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-}
-
-.carousel-item {
-    display: none;
-    text-align: center;
-}
-
-.carousel-item.active {
-    display: block;
-}
-
-.carousel-item img {
-    width: 100%;
-    height: 150px;
-    object-fit: cover;
-    border-radius: 5px;
-    border: 1px solid #B4D1EC;
-}
-
-.carousel-item p {
-    margin: 5px 0 10px;
-    color: #333;
-    font-weight: bold;
-}
-
-.carousel-item a {
-    text-decoration: none;
-}
-
-.carousel-item:hover p {
-    color: #E95B95;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-/* Responsividade */
-@media (max-width: 768px) {
-    .container {
-        flex-direction: column;
-        padding: 10px;
-    }
-
-    .sidebar, .main-content, .right-sidebar {
-        width: 100%;
-        margin-bottom: 20px;
-    }
-
-    .profiles-grid {
-        gap: 10px;
-    }
-
-    .profile-card {
-        width: calc(50% - 10px);
-    }
-
-    .filters {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .filters input, .filters select {
-        width: 100%;
-    }
-
-    .carousel-item img {
-        height: 120px;
-    }
-
-    .top-bar {
-        flex-direction: column;
-        padding: 10px;
-    }
-
-    .top-center input {
-        width: 100%;
-        margin-bottom: 10px;
-    }
-
-    .top-right {
-        display: flex;
-        gap: 10px;
-    }
-}
-
-@media (max-width: 480px) {
-    .profile-card {
-        width: 100%;
-    }
-
-    .post-form textarea {
-        height: 80px;
-    }
-}
-/* ... (estilos anteriores mantidos) ... */
 
 .photo-gallery img {
     width: 150px;
@@ -592,15 +356,10 @@ body {
     font-size: 40px;
     cursor: pointer;
 }
-/* ... (estilos anteriores mantidos) ... */
 
+/* Formulário de Avaliação */
 .review-form {
     margin-bottom: 20px;
-}
-
-.review-form h3 {
-    color: #E95B95;
-    margin: 0 0 10px;
 }
 
 .star-rating {
@@ -617,273 +376,45 @@ body {
     color: #E95B95;
 }
 
-#review-comment {
-    width: 100%;
-    height: 80px;
-    border: 1px solid #89B1D6;
-    border-radius: 5px;
-    padding: 10px;
-    margin-bottom: 10px;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.reviews-pending {
-    margin-top: 20px;
+/* Profile Actions */
+.profile-actions {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
 }
 
-.pending-review {
-    background-color: #fff;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    border: 1px solid #B4D1EC;
-}
-
-.pending-review button {
+.edit-btn,
+.delete-btn {
     padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.3s ease;
+}
+
+.edit-btn {
+    background-color: #89B1D6;
+    color: white;
+}
+
+.delete-btn {
     background-color: #E95B95;
     color: white;
     border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.reviews-approval {
-    margin-top: 20px;
 }
 
-.review-pending {
-    background-color: #f9f9f9;
-    padding: 15px;
-    border-radius: 5px;
-    margin-bottom: 10px;
-}
-
-.review-pending p {
-    margin: 5px 0;
-}
-
-.review-pending button {
-    padding: 5px 10px;
-    background-color: #28A745;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.tags {
-    margin-top: 10px;
-}
-
-.tag {
-    display: inline-block;
-    background-color: #B4D1EC;
+.edit-btn:hover,
+.delete-btn:hover {
+    background-color: #F6ECB2;
     color: #333;
-    padding: 5px 10px;
-    border-radius: 15px;
-    margin: 5px 5px 0 0;
-    font-size: 14px;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.profile-actions {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    display: flex;
-    gap: 10px;
 }
 
-.edit-btn {
-    padding: 10px 20px;
-    background-color: #89B1D6;
-    color: white;
-    text-decoration: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.delete-btn {
-    padding: 10px 20px;
-    background-color: #E95B95;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-
-
-.profile-photo-container {
-    display: inline-block;
-}
-
-.profile-header img {
-    width: 200px;
-    height: 250px;
-    object-fit: cover;
-    border-radius: 5px;
-    border: 2px solid #B4D1EC;
-    margin-right: 20px;
-}
-
-.profile-info {
-    position: relative;
-    display: inline-block;
-    vertical-align: top;
-    width: calc(100% - 220px); /* Ajusta para a largura da foto */
-}
-
-.profile-actions {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    display: flex;
-    gap: 5px;
-}
-
-.edit-btn, .delete-btn {
-    padding: 5px 10px;
-    font-size: 12px;
-    border-radius: 3px;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.edit-btn {
-    background-color: #89B1D6;
-    color: white;
-}
-
-.delete-btn {
-    background-color: #E95B95;
-    color: white;
-    border: none;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.profile-actions {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    display: flex;
-    gap: 5px;
-}
-
-.edit-btn, .delete-btn {
-    padding: 5px;
-    width: 20px;
-    height: 20px;
-    font-size: 0; /* Remove texto, mantém apenas ícone */
-    border-radius: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.edit-btn {
-    background-color: #89B1D6;
-    color: white;
-}
-
-.delete-btn {
-    background-color: #E95B95;
-    color: white;
-    border: none;
-}
-/* ... (estilos anteriores mantidos) ... */
-
-.confirm-popup {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    justify-content: center;
-    align-items: center;
-    z-index: 2000;
-}
-
-.confirm-popup.active {
-    display: flex;
-}
-
-.confirm-content {
-    background-color: white;
-    padding: 20px;
-    border-radius: 5px;
-    text-align: center;
-    max-width: 400px;
-    width: 90%;
-}
-
-.confirm-content h3 {
-    color: #E95B95;
-    margin: 0 0 15px;
-}
-
-.confirm-buttons {
-    margin-top: 20px;
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-}
-
-.confirm-buttons button {
-    padding: 8px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.confirm-buttons button:first-child {
-    background-color: #E95B95;
-    color: white;
-    border: none;
-}
-
-.confirm-buttons button:last-child {
-    background-color: #89B1D6;
-    color: white;
-    border: none;
-}/* ... (estilos anteriores mantidos) ... */
-
-.profile-actions {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    display: flex;
-    gap: 5px;
-}
-
-.edit-btn, .delete-btn {
-    padding: 5px 10px;
-    font-size: 12px;
-    border-radius: 3px;
-    text-decoration: none;
-    cursor: pointer;
-    position: relative;
-}
-
-.edit-btn {
-    background-color: #89B1D6;
-    color: white;
-}
-
-.delete-btn {
-    background-color: #E95B95;
-    color: white;
-    border: none;
-}
-
-.edit-btn .tooltip, .delete-btn .tooltip {
+.edit-btn .tooltip,
+.delete-btn .tooltip {
     visibility: hidden;
     width: 100px;
     background-color: #333;
@@ -893,19 +424,20 @@ body {
     border-radius: 3px;
     position: absolute;
     z-index: 1;
-    bottom: 125%; /* Acima do botão */
+    bottom: 125%;
     left: 50%;
-    margin-left: -50px;
+    transform: translateX(-50%);
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.3s ease;
 }
 
-.edit-btn:hover .tooltip, .delete-btn:hover .tooltip {
+.edit-btn:hover .tooltip,
+.delete-btn:hover .tooltip {
     visibility: visible;
     opacity: 1;
 }
-/* ... (estilos anteriores mantidos) ... */
 
+/* Popup de Confirmação */
 .confirm-popup {
     display: none;
     position: fixed;
@@ -939,4 +471,239 @@ body {
 
 .confirm-popup.active .confirm-content {
     transform: scale(1);
+}
+
+.confirm-buttons {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.confirm-buttons button:first-child {
+    background-color: #E95B95;
+}
+
+.confirm-buttons button:last-child {
+    background-color: #89B1D6;
+}
+
+/* Admin Form */
+.admin-form {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.admin-form label {
+    display: block;
+    margin: 10px 0 5px;
+}
+
+.admin-form input,
+.admin-form textarea,
+.admin-form select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #89B1D6;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+.photo-preview {
+    margin: 10px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* Login */
+.login-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 20px;
+    background-color: white;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.login-container h1 {
+    color: #E95B95;
+    margin-bottom: 20px;
+}
+
+.login-container label {
+    display: block;
+    margin: 10px 0 5px;
+}
+
+.login-container input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #89B1D6;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+/* Filtros */
+.filters {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filters label {
+    color: #333;
+}
+
+.filters input,
+.filters select {
+    padding: 8px;
+    border: 1px solid #89B1D6;
+    border-radius: 5px;
+}
+
+/* Carousel */
+.carousel {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+.carousel-item {
+    display: none;
+    text-align: center;
+}
+
+.carousel-item.active {
+    display: block;
+}
+
+.carousel-item img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 5px;
+    border: 1px solid #B4D1EC;
+}
+
+.carousel-item p {
+    margin: 5px 0 10px;
+    font-weight: bold;
+}
+
+.carousel-item a:hover p {
+    color: #E95B95;
+}
+
+/* Tags */
+.tags {
+    margin-top: 10px;
+}
+
+.tag {
+    display: inline-block;
+    background-color: #B4D1EC;
+    padding: 5px 10px;
+    border-radius: 15px;
+    margin: 5px 5px 0 0;
+    font-size: 14px;
+}
+
+/* Reviews Approval */
+.reviews-approval {
+    margin-top: 20px;
+}
+
+.review-pending {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.review-pending p {
+    margin: 5px 0;
+}
+
+.review-pending button {
+    background-color: #28A745;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        padding: 10px;
+    }
+
+    .sidebar,
+    .main-content,
+    .right-sidebar {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .profiles-grid {
+        gap: 10px;
+    }
+
+    .profile-card {
+        width: calc(50% - 10px);
+    }
+
+    .filters {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .filters input,
+    .filters select {
+        width: 100%;
+    }
+
+    .carousel-item img {
+        height: 120px;
+    }
+
+    .top-bar {
+        flex-direction: column;
+        padding: 10px;
+    }
+
+    .top-center input {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    .top-right {
+        display: flex;
+        gap: 10px;
+    }
+
+    .profile-info {
+        width: 100%;
+    }
+
+    .profile-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .profile-header img {
+        margin-right: 0;
+        margin-bottom: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .profile-card {
+        width: 100%;
+    }
+
+    .post-form textarea,
+    #review-comment {
+        height: 60px;
+    }
 }
