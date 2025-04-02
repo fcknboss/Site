@@ -672,3 +672,95 @@ body {
     border-radius: 5px;
     cursor: pointer;
 }
+/* ... (estilos anteriores mantidos) ... */
+
+.tags {
+    margin-top: 10px;
+}
+
+.tag {
+    display: inline-block;
+    background-color: #B4D1EC;
+    color: #333;
+    padding: 5px 10px;
+    border-radius: 15px;
+    margin: 5px 5px 0 0;
+    font-size: 14px;
+}
+/* ... (estilos anteriores mantidos) ... */
+
+.profile-actions {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.edit-btn {
+    padding: 10px 20px;
+    background-color: #89B1D6;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.delete-btn {
+    padding: 10px 20px;
+    background-color: #E95B95;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+/* ... (estilos anteriores mantidos) ... */
+
+./* ... (estilos anteriores mantidos) ... */
+
+.profile-photo-container {
+    display: inline-block;
+}
+
+.profile-header img {
+    width: 200px;
+    height: 250px;
+    object-fit: cover;
+    border-radius: 5px;
+    border: 2px solid #B4D1EC;
+    margin-right: 20px;
+}
+
+.profile-info {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    width: calc(100% - 220px); /* Ajusta para a largura da foto */
+}
+
+.profile-actions {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+}
+
+.edit-btn, .delete-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.edit-btn {
+    background-color: #89B1D6;
+    color: white;
+}
+
+.delete-btn {
+    background-color: #E95B95;
+    color: white;
+    border: none;
+}

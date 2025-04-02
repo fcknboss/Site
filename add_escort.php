@@ -12,13 +12,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $age = (int)$_POST['age'];
     $location = $_POST['location'];
     $description = $_POST['description'];
+    $physical_traits = $_POST['physical_traits'];
     $services = $_POST['services'];
     $rates = $_POST['rates'];
     $availability = $_POST['availability'];
+    $attendance = $_POST['attendance'];
+    $payment = $_POST['payment'];
     $type = $_POST['type'];
 
     $username = strtolower(str_replace(' ', '_', $name)) . rand(100, 999);
-    $password = password_hash('default123', PASSWORD_DEFAULT); // Senha padrão com hash
+    $password = password_hash('default123', PASSWORD_DEFAULT);
     $email = $username . '@eskort.com';
     $stmt = $conn->prepare("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, 'escort')");
     $stmt->bind_param("sss", $username, $password, $email);
@@ -31,9 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $profile_photo_path = $target_dir . $profile_photo_name;
     move_uploaded_file($_FILES["profile_photo"]["tmp_name"], $profile_photo_path);
 
-    $stmt = $conn->prepare("INSERT INTO escorts (user_id, name, age, location, description, services, rates, availability, profile_photo, type) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("isisssssss", $user_id, $name, $age, $location, $description, $services, $rates, $availability, $profile_photo_path, $type);
+    $stmt = $conn->prepare("INSERT INTO escorts (user_id, name, age, location, description, physical_traits, services, rates, availability, profile_photo, type) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("isissssssss", $user_id, $name, $age, $location, $description, $physical_traits, $services, $rates, $availability, $profile_photo_path, $type);
     $stmt->execute();
     $escort_id = $conn->insert_id;
 

@@ -14,7 +14,6 @@ if (!$escort) {
     die("Acompanhante não encontrada.");
 }
 
-// Calcular média das avaliações
 $stmt = $conn->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE escort_id = ? AND is_approved = 1");
 $stmt->bind_param("i", $id);
 $stmt->execute();
@@ -22,14 +21,11 @@ $rating_data = $stmt->get_result()->fetch_assoc();
 $avg_rating = $rating_data['avg_rating'] ? number_format($rating_data['avg_rating'], 1) : 'N/A';
 $review_count = $rating_data['review_count'];
 
-// Verificar se o usuário já avaliou
-$user_review = null;
-if (isset($_SESSION['user_id'])) {
-    $stmt = $conn->prepare("SELECT id, rating, comment FROM reviews WHERE escort_id = ? AND client_id = ?");
-    $stmt->bind_param("ii", $id, $_SESSION['user_id']);
-    $stmt->execute();
-    $user_review = $stmt->get_result()->fetch_assoc();
-}
+$user_id = $_SESSION['user_id'];
+$stmt = $conn->prepare("SELECT id, rating, comment FROM reviews WHERE escort_id = ? AND client_id = ?");
+$stmt->bind_param("ii", $id, $user_id);
+$stmt->execute();
+$user_review = $stmt->get_result()->fetch_assoc();
 ?>
 
 <!DOCTYPE html>
@@ -60,7 +56,9 @@ if (isset($_SESSION['user_id'])) {
 
     <div class="profile-container">
         <div class="profile-header">
-            <img src="<?php echo $escort['profile_photo']; ?>" alt="<?php echo $escort['name']; ?>">
+            <div class="profile-photo-container">
+                <img src="<?php echo $escort['profile_photo']; ?>" alt="<?php echo $escort['name']; ?>">
+            </div>
             <div class="profile-info">
                 <h1>
                     <?php echo $escort['name']; ?>
@@ -86,13 +84,17 @@ if (isset($_SESSION['user_id'])) {
                 <p class="location"><?php echo $escort['location']; ?> | <?php echo $escort['age']; ?> anos</p>
                 <p class="rates"><?php echo $escort['rates']; ?></p>
                 <p><strong>Avaliação Média:</strong> <?php echo $avg_rating; ?>/5 (<?php echo $review_count; ?> avaliações)</p>
-                <p><strong>Atendimento:</strong> Com Local, Hotéis e Motéis</p>
-                <p><strong>Pagamento:</strong> Dinheiro, Cartão</p>
                 <div class="social-links">
                     <a href="https://instagram.com/<?php echo strtolower(str_replace(' ', '', $escort['username'])); ?>" target="_blank">Instagram</a>
                     <a href="https://twitter.com/<?php echo strtolower(str_replace(' ', '', $escort['username'])); ?>" target="_blank">Twitter</a>
                 </div>
                 <button>Reservar</button>
+                <?php if ($_SESSION['role'] === 'admin'): ?>
+                    <div class="profile-actions">
+                        <a href="edit_escort.php?id=<?php echo $id; ?>" class="edit-btn">Editar</a>
+                        <button onclick="deleteEscort(<?php echo $id; ?>)" class="delete-btn">Excluir</button>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -114,12 +116,24 @@ if (isset($_SESSION['user_id'])) {
         <div class="profile-section">
             <h2>Sobre</h2>
             <p><?php echo $escort['description']; ?></p>
+            <?php if ($escort['physical_traits']): ?>
+                <div class="tags">
+                    <?php
+                    $traits = explode(',', $escort['physical_traits']);
+                    foreach ($traits as $trait) {
+                        echo "<span class='tag'>" . trim($trait) . "</span>";
+                    }
+                    ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="profile-section">
             <h2>Serviços</h2>
-            <p><?php echo $escort['services']; ?></p>
+            <p><strong>O que ofereço:</strong> <?php echo $escort['services']; ?></p>
             <p><strong>Disponibilidade:</strong> <?php echo $escort['availability']; ?></p>
+            <p><strong>Atendimento:</strong> Com Local, Hotéis e Motéis</p>
+            <p><strong>Pagamento:</strong> Dinheiro, Cartão</p>
         </div>
 
         <div class="profile-section">
@@ -132,24 +146,9 @@ if (isset($_SESSION['user_id'])) {
         </div>
 
         <div class="profile-section">
-            <h2>Scrapbook</h2>
-            <?php
-            $stmt = $conn->prepare("SELECT s.message, u.username FROM scraps s JOIN users u ON s.client_id = u.id WHERE s.escort_id = ?");
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-            $scraps = $stmt->get_result();
-            while ($scrap = $scraps->fetch_assoc()) {
-                echo "<div class='scrap'>";
-                echo "<p><strong>" . $scrap['username'] . ":</strong> " . $scrap['message'] . "</p>";
-                echo "</div>";
-            }
-            ?>
-        </div>
-
-        <div class="profile-section">
             <h2>Avaliações</h2>
             <div class="review-form">
-                <h3><?php echo $user_review ? 'Editar sua Avaliação' : 'Deixe sua Avaliação'; ?></h3>
+                <h3><?php echo $user_review ? 'Edite sua Avaliação' : 'Deixe sua Avaliação'; ?></h3>
                 <div class="star-rating">
                     <span class="star" data-value="1">★</span>
                     <span class="star" data-value="2">★</span>
@@ -159,20 +158,26 @@ if (isset($_SESSION['user_id'])) {
                 </div>
                 <input type="hidden" id="rating-value" value="<?php echo $user_review ? $user_review['rating'] : 0; ?>">
                 <textarea id="review-comment" placeholder="Escreva seu comentário..." required><?php echo $user_review ? $user_review['comment'] : ''; ?></textarea>
-                <button onclick="submitReview(<?php echo $id; ?>, <?php echo $user_review ? $user_review['id'] : 'null'; ?>)">
+                <button onclick="submitReview(<?php echo $id; ?>, <?php echo $user_review ? 'true' : 'false'; ?>)">
                     <?php echo $user_review ? 'Atualizar Avaliação' : 'Enviar Avaliação'; ?>
                 </button>
             </div>
             <div id="reviews-list">
                 <?php
-                $stmt = $conn->prepare("SELECT r.id, r.rating, r.comment, u.username FROM reviews r JOIN users u ON r.client_id = u.id WHERE r.escort_id = ? AND r.is_approved = 1");
+                $stmt = $conn->prepare("SELECT r.rating, r.comment, u.username, r.client_id 
+                                        FROM reviews r 
+                                        JOIN users u ON r.client_id = u.id 
+                                        WHERE r.escort_id = ? AND r.is_approved = 1");
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
                 $reviews = $stmt->get_result();
                 while ($review = $reviews->fetch_assoc()) {
-                    echo "<div class='review' data-id='" . $review['id'] . "'>";
+                    echo "<div class='review' id='review-" . $review['client_id'] . "'>";
                     echo "<p><strong>" . $review['username'] . ":</strong> " . $review['rating'] . "/5</p>";
                     echo "<p>" . $review['comment'] . "</p>";
+                    if ($review['client_id'] == $user_id) {
+                        echo "<button onclick='editReview(" . $id . ")'>Editar</button>";
+                    }
                     echo "</div>";
                 }
                 ?>

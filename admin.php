@@ -75,12 +75,16 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                 <input type="text" name="location" required>
                 <label>Descrição:</label>
                 <textarea name="description" required></textarea>
-                <label>Serviços:</label>
+                <label>Características Físicas (separadas por vírgula):</label>
+                <input type="text" name="physical_traits" placeholder="Ex: loira, alta, olhos verdes">
+                <label>Serviços (O que ofereço):</label>
                 <input type="text" name="services" required>
-                <label>Taxas:</label>
-                <input type="text" name="rates" required>
                 <label>Disponibilidade:</label>
                 <input type="text" name="availability" required>
+                <label>Atendimento:</label>
+                <input type="text" name="attendance" value="Com Local, Hotéis e Motéis" required>
+                <label>Pagamento:</label>
+                <input type="text" name="payment" value="Dinheiro, Cartão" required>
                 <label>Tipo:</label>
                 <select name="type" required>
                     <option value="acompanhante">Acompanhante</option>
@@ -96,7 +100,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
             </form>
 
             <h1>Aprovar Avaliações</h1>
-            <div class="reviews-pending">
+            <div class="reviews-approval">
                 <?php
                 $stmt = $conn->prepare("SELECT r.id, r.rating, r.comment, u.username, e.name 
                                         FROM reviews r 
@@ -104,9 +108,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                                         JOIN escorts e ON r.escort_id = e.id 
                                         WHERE r.is_approved = 0");
                 $stmt->execute();
-                $pending_reviews = $stmt->get_result();
-                while ($review = $pending_reviews->fetch_assoc()) {
-                    echo "<div class='pending-review' data-id='" . $review['id'] . "'>";
+                $reviews = $stmt->get_result();
+                while ($review = $reviews->fetch_assoc()) {
+                    echo "<div class='review-pending'>";
                     echo "<p><strong>" . $review['username'] . " sobre " . $review['name'] . ":</strong> " . $review['rating'] . "/5</p>";
                     echo "<p>" . $review['comment'] . "</p>";
                     echo "<button onclick='approveReview(" . $review['id'] . ")'>Aprovar</button>";

@@ -1,3 +1,22 @@
+function deleteEscort(id) {
+    if (confirm('Tem certeza que deseja excluir este perfil?')) {
+        fetch('delete_escort.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `id=${id}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                window.location.href = 'index.php';
+            } else {
+                alert(data.message);
+            }
+        });
+    }
+}
+
+// ... (outras funções mantidas: setRating, submitReview, editReview, etc.) ...
 function approveReview(reviewId) {
     fetch('approve_review.php', {
         method: 'POST',
