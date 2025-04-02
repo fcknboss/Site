@@ -29,6 +29,26 @@ $stmt = $conn->prepare("SELECT id, rating, comment FROM reviews WHERE escort_id 
 $stmt->bind_param("ii", $id, $user_id);
 $stmt->execute();
 $user_review = $stmt->get_result()->fetch_assoc();
+
+// Frase promocional (baseada em physical_traits ou um campo futuro)
+$promo_phrases = [
+    'loira' => 'Loirinha deliciosa!',
+    'morena' => 'Morena sensual e provocante!',
+    'alta' => 'Elegante e imponente!',
+    'curvilínea' => 'Corpo escultural!',
+    'olhos verdes' => 'Olhar irresistível!',
+    'olhos castanhos' => 'Doce e envolvente!'
+];
+$promo_phrase = 'Companhia inesquecível!'; // Default
+if ($escort['physical_traits']) {
+    $traits = array_map('trim', explode(',', $escort['physical_traits']));
+    foreach ($traits as $trait) {
+        if (isset($promo_phrases[$trait])) {
+            $promo_phrase = $promo_phrases[$trait];
+            break;
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -71,8 +91,10 @@ $user_review = $stmt->get_result()->fetch_assoc();
                         </span>
                     <?php endif; ?>
                 </h1>
+                <p class="promo-phrase"><?php echo $promo_phrase; ?></p>
                 <p class="location"><?php echo htmlspecialchars($escort['location']); ?> | <?php echo $escort['age']; ?> anos</p>
                 <p class="rates"><?php echo htmlspecialchars($escort['rates']); ?></p>
+                <p><strong>Telefone:</strong> <?php echo htmlspecialchars($escort['phone'] ?? 'Não informado'); ?></p>
                 <p><strong>Avaliação Média:</strong> <?php echo $avg_rating; ?>/5 (<?php echo $review_count; ?> avaliações)</p>
                 <div class="social-links">
                     <a href="https://instagram.com/<?php echo htmlspecialchars(strtolower(str_replace(' ', '', $escort['username']))); ?>" target="_blank" rel="noopener">Instagram</a>

@@ -731,3 +731,11 @@ body {
 .footer-links a:hover {
     color: #F6ECB2;
 }
+/* ... (estilos anteriores mantidos) ... */
+
+.profile-info .promo-phrase {
+    color: #E95B95;
+    font-style: italic;
+    margin: 5px 0;
+    font-size: 18px;
+}

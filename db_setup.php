@@ -103,6 +103,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (sender_id) REFERENCES users(id)
 )");
 
+
 $conn->query("INSERT INTO users (username, password, email, role) 
     VALUES ('ana_escort', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'ana@example.com', 'escort'), 
            ('joao_client', '" . password_hash('123', PASSWORD_DEFAULT) . "', 'joao@example.com', 'client'),
@@ -132,4 +133,27 @@ $conn->query("INSERT INTO comments (post_id, user_id, content)
 
 echo "Banco de dados configurado com sucesso!";
 $conn->close();
+// db_setup.php (trecho)
+$conn->query("CREATE TABLE IF NOT EXISTS escorts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    name VARCHAR(100),
+    age INT,
+    location VARCHAR(100),
+    description TEXT,
+    services TEXT,
+    rates VARCHAR(100),
+    availability VARCHAR(255),
+    profile_photo VARCHAR(100),
+    type ENUM('acompanhante', 'criadora') DEFAULT 'acompanhante',
+    is_online TINYINT(1) DEFAULT 0,
+    physical_traits VARCHAR(255),
+    phone VARCHAR(20),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+)");
+
+// Atualizar dados de exemplo
+$conn->query("INSERT INTO escorts (user_id, name, age, location, description, services, rates, availability, profile_photo, type, is_online, physical_traits, phone) 
+    VALUES (1, 'Ana', 25, 'São Paulo', 'Acompanhante simpática e divertida', 'Companhia, eventos', 'R$200/h', 'Seg-Sex, 18h-23h', 'uploads/ana.jpg', 'acompanhante', 1, 'loira, alta, olhos verdes', '(11) 98226-4226'),
+           (4, 'Luna', 28, 'Rio de Janeiro', 'Criadora de conteúdo e companhia', 'Fotos, vídeos, eventos', 'R$300/h', 'Ter-Qui, 14h-20h', 'uploads/luna.jpg', 'criadora', 0, 'morena, curvilínea, olhos castanhos', '(11) 93379-6106')");
 ?>
