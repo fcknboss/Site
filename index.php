@@ -1,7 +1,7 @@
 <?php 
 include 'config.php';
-session_start(); // Para simular usuário logado
-$_SESSION['user_id'] = 2; // Simulação de login como joao_client (em produção, use autenticação real)
+session_start();
+$_SESSION['user_id'] = 2; // Simulação de login como joao_client
 ?>
 
 <!DOCTYPE html>
@@ -13,7 +13,6 @@ $_SESSION['user_id'] = 2; // Simulação de login como joao_client (em produçã
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Topo estilo Facebook com cores do Orkut -->
     <div class="top-bar">
         <div class="top-left">
             <h2>Eskort</h2>
@@ -39,12 +38,27 @@ $_SESSION['user_id'] = 2; // Simulação de login como joao_client (em produçã
             </ul>
         </div>
         <div class="main-content">
-            <!-- Campo de postagem estilo Facebook -->
+            <div class="profiles-section">
+                <h3>Acompanhantes</h3>
+                <div class="profiles-grid">
+                    <?php
+                    $result = $conn->query("SELECT id, name, profile_photo FROM escorts");
+                    while ($row = $result->fetch_assoc()) {
+                        $photo = $row['profile_photo'] ? $row['profile_photo'] : 'uploads/default.jpg';
+                        echo "<a href='profile.php?id=" . $row['id'] . "' class='profile-card'>";
+                        echo "<img src='$photo' alt='" . $row['name'] . "'>";
+                        echo "<p>" . $row['name'] . "</p>";
+                        echo "</a>";
+                    }
+                    ?>
+                </div>
+            </div>
+
             <div class="post-form">
                 <textarea id="post-content" placeholder="No que você está pensando?"></textarea>
                 <button onclick="submitPost()">Publicar</button>
             </div>
-            <!-- Mural estilo Facebook -->
+
             <div class="feed" id="feed">
                 <?php
                 $result = $conn->query("SELECT p.id, p.content, p.timestamp, u.username, e.profile_photo 
@@ -54,7 +68,10 @@ $_SESSION['user_id'] = 2; // Simulação de login como joao_client (em produçã
                     ORDER BY p.timestamp DESC");
                 while ($row = $result->fetch_assoc()) {
                     $photo = $row['profile_photo'] ? $row['profile_photo'] : 'uploads/default.jpg';
-                    echo "<div class='post'>";
+                    $post_id = $row['id'];
+                    $likes = $conn->query("SELECT COUNT(*) as likes FROM likes WHERE post_id = $post_id")->fetch_assoc()['likes'];
+                    $comments = $conn->query("SELECT c.content, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.post_id = $post_id ORDER BY c.timestamp");
+                    echo "<div class='post' id='post-$post_id'>";
                     echo "<div class='post-header'>";
                     echo "<img src='$photo' alt='Foto'>";
                     echo "<div>";
@@ -64,10 +81,14 @@ $_SESSION['user_id'] = 2; // Simulação de login como joao_client (em produçã
                     echo "</div>";
                     echo "<p>" . $row['content'] . "</p>";
                     echo "<div class='post-actions'>";
-                    echo "<button onclick='likePost(" . $row['id'] . ")'>Curtir</button>";
-                    echo "<button onclick='showComment(" . $row['id'] . ")'>Comentar</button>";
+                    echo "<button onclick='likePost($post_id)' data-likes='$likes'>Curtir ($likes)</button>";
+                    echo "<button onclick='showComment($post_id)'>Comentar</button>";
                     echo "</div>";
-                    echo "<div class='comments' id='comments-" . $row['id'] . "'></div>";
+                    echo "<div class='comments' id='comments-$post_id'>";
+                    while ($comment = $comments->fetch_assoc()) {
+                        echo "<p><strong>" . $comment['username'] . ":</strong> " . $comment['content'] . "</p>";
+                    }
+                    echo "</div>";
                     echo "</div>";
                 }
                 ?>

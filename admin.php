@@ -6,12 +6,13 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     if (isset($_POST['username']) && isset($_POST['password'])) {
         $username = $_POST['username'];
         $password = $_POST['password'];
-        $stmt = $conn->prepare("SELECT role FROM users WHERE username = ? AND password = ?");
+        $stmt = $conn->prepare("SELECT role, id FROM users WHERE username = ? AND password = ?");
         $stmt->bind_param("ss", $username, $password);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($row = $result->fetch_assoc()) {
             $_SESSION['role'] = $row['role'];
+            $_SESSION['user_id'] = $row['id'];
         }
     }
     if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
@@ -34,7 +35,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Topo estilo Facebook com cores do Orkut -->
     <div class="top-bar">
         <div class="top-left">
             <h2>Eskort Admin</h2>
@@ -74,4 +74,24 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                 <label>Taxas:</label>
                 <input type="text" name="rates" required>
                 <label>Disponibilidade:</label>
-                <input type="text" name="availability" required
+                <input type="text" name="availability" required>
+                <label>Tipo:</label>
+                <select name="type" required>
+                    <option value="acompanhante">Acompanhante</option>
+                    <option value="criadora">Criadora de Conteúdo</option>
+                </select>
+                <label>Foto de Perfil:</label>
+                <input type="file" name="profile_photo" accept="image/*" required>
+                <label>Fotos Adicionais (máximo 5):</label>
+                <input type="file" name="additional_photos[]" accept="image/*" multiple>
+                <button type="submit">Cadastrar</button>
+            </form>
+        </div>
+        <div class="right-sidebar">
+            <h3>Dicas</h3>
+            <p>Preencha todos os campos e adicione até 5 fotos adicionais.</p>
+        </div>
+    </div>
+</body>
+</html>
+<?php $conn->close(); ?>
