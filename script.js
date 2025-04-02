@@ -1,3 +1,38 @@
+function validateAndSendMessage(event, id) {
+    event.preventDefault();
+    const message = document.getElementById('contact-message').value.trim();
+    if (message.length < 5) {
+        document.getElementById('contact-response').innerHTML = '<p style="color: red;">A mensagem deve ter pelo menos 5 caracteres.</p>';
+        return false;
+    }
+    sendMessage(event, id);
+    return false;
+}
+
+// Funções existentes mantidas
+function sendMessage(event, id) {
+    event.preventDefault();
+    const content = document.getElementById('contact-message').value;
+    if (content) {
+        fetch('send_message.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `escort_id=${id}&content=${encodeURIComponent(content)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            const responseDiv = document.getElementById('contact-response');
+            if (data.status === 'success') {
+                responseDiv.innerHTML = '<p style="color: green;">' + data.message + '</p>';
+                document.getElementById('contact-message').value = '';
+            } else {
+                responseDiv.innerHTML = '<p style="color: red;">' + data.message + '</p>';
+            }
+        });
+    }
+}
+
+// ... (outras funções como deleteEscort, confirmDelete, closeConfirm, etc.) ...
 function deleteEscort(id) {
     document.getElementById('confirm-delete').classList.add('active');
 }
