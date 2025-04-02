@@ -84,7 +84,7 @@ include 'config.php';
                     $likes = $conn->query("SELECT COUNT(*) as likes FROM likes WHERE post_id = $post_id")->fetch_assoc()['likes'];
                     $comments = $conn->query("SELECT c.content, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.post_id = $post_id ORDER BY c.timestamp");
                     echo "<div class='post' id='post-$post_id'>";
-                    echo "<div class='.another-post-header'>";
+                    echo "<div class='another-post-header'>";
                     echo "<img src='$photo' alt='Foto'>";
                     echo "<div>";
                     echo "<h4>" . $row['username'] . "</h4>";
@@ -113,12 +113,20 @@ include 'config.php';
                 <li><a href="#">Rio de Janeiro</a></li>
             </ul>
             <h3>Acompanhantes em Destaque</h3>
-            <?php
-            $result = $conn->query("SELECT name, rates FROM escorts LIMIT 2");
-            while ($row = $result->fetch_assoc()) {
-                echo "<p>" . $row['name'] . " - " . $row['rates'] . "</p>";
-            }
-            ?>
+            <div class="carousel">
+                <?php
+                $result = $conn->query("SELECT id, name, profile_photo FROM escorts LIMIT 3");
+                while ($row = $result->fetch_assoc()) {
+                    $photo = $row['profile_photo'] ? $row['profile_photo'] : 'uploads/default.jpg';
+                    echo "<div class='carousel-item'>";
+                    echo "<a href='profile.php?id=" . $row['id'] . "'>";
+                    echo "<img src='$photo' alt='" . $row['name'] . "'>";
+                    echo "<p>" . $row['name'] . "</p>";
+                    echo "</a>";
+                    echo "</div>";
+                }
+                ?>
+            </div>
         </div>
     </div>
     <script src="script.js"></script>

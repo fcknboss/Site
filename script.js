@@ -1,3 +1,83 @@
+function setRating(value) {
+    const stars = document.querySelectorAll('.star');
+    stars.forEach(star => {
+        star.classList.remove('active');
+        if (parseInt(star.getAttribute('data-value')) <= value) {
+            star.classList.add('active');
+        }
+    });
+    document.getElementById('rating-value').value = value;
+}
+
+document.querySelectorAll('.star').forEach(star => {
+    star.addEventListener('click', () => setRating(parseInt(star.getAttribute('data-value'))));
+});
+
+function submitReview(escortId) {
+    const rating = document.getElementById('rating-value').value;
+    const comment = document.getElementById('review-comment').value;
+    if (rating > 0 && comment) {
+        fetch('add_review.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `escort_id=${escortId}&rating=${rating}&comment=${encodeURIComponent(comment)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const reviewsList = document.getElementById('reviews-list');
+                const review = document.createElement('div');
+                review.className = 'review';
+                review.innerHTML = `
+                    <p><strong>${data.review.username}:</strong> ${data.review.rating}/5</p>
+                    <p>${data.review.comment}</p>
+                `;
+                reviewsList.insertBefore(review, reviewsList.firstChild);
+                document.getElementById('review-comment').value = '';
+                setRating(0);
+            } else {
+                alert(data.message);
+            }
+        });
+    } else {
+        alert('Por favor, selecione uma nota e escreva um comentário.');
+    }
+}
+
+// ... (outras funções mantidas) ...
+function startCarousel() {
+    const items = document.querySelectorAll('.carousel-item');
+    let currentIndex = 0;
+
+    function showNext() {
+        items[currentIndex].classList.remove('active');
+        currentIndex = (currentIndex + 1) % items.length;
+        items[currentIndex].classList.add('active');
+    }
+
+    items[currentIndex].classList.add('active');
+    setInterval(showNext, 3000); // Troca a cada 3 segundos
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    startCarousel();
+    // ... (outras funções mantidas) ...
+});
+function openLightbox(src) {
+    const lightbox = document.getElementById('lightbox');
+    const img = document.getElementById('lightbox-img');
+    img.src = src;
+    lightbox.classList.add('active');
+}
+
+function closeLightbox() {
+    const lightbox = document.getElementById('lightbox');
+    lightbox.classList.remove('active');
+}
+
+// ... (outras funções mantidas: filterProfiles, submitPost, likePost, showComment, sendMessage) ...
+
+// ... (funções existentes: filterProfiles, submitPost, likePost, showComment, sendMessage) ...
 function submitPost() {
     const content = document.getElementById('post-content').value;
     if (content) {
@@ -104,8 +184,10 @@ function sendMessage(event, escortId) {
     }
 }
 
+
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.profile-details button')?.addEventListener('click', () => {
         alert('Reserva solicitada! Entre em contato para confirmar.');
     });
+
 });
