@@ -1,0 +1,188 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-color: #E2E8FD;
+}
+
+/* Topo estilo Facebook com cores do Orkut */
+.top-bar {
+    background-color: #89B1D6;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
+}
+
+.top-left h2 {
+    color: #E95B95;
+    margin: 0;
+}
+
+.top-center input {
+    width: 300px;
+    padding: 8px;
+    border: 1px solid #B4D1EC;
+    border-radius: 5px;
+}
+
+.top-center button {
+    padding: 8px 15px;
+    background-color: #E95B95;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+.top-right a {
+    color: white;
+    text-decoration: none;
+    margin-left: 20px;
+}
+
+.top-right a:hover {
+    color: #F6ECB2;
+}
+
+.container {
+    display: flex;
+    max-width: 1200px;
+    margin: 60px auto 0;
+    padding: 20px;
+}
+
+.sidebar {
+    width: 20%;
+    background-color: #B4D1EC;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar a {
+    text-decoration: none;
+    color: #333;
+    display: block;
+    padding: 10px;
+}
+
+.sidebar a:hover {
+    background-color: #89B1D6;
+    color: white;
+}
+
+.main-content {
+    width: 60%;
+    padding: 0 20px;
+}
+
+.post-form, .feed, .profile-header, .profile-details, .scrapbook, .reviews {
+    background-color: white;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.post-form textarea {
+    width: 100%;
+    height: 60px;
+    border: 1px solid #89B1D6;
+    border-radius: 5px;
+    padding: 10px;
+    resize: none;
+}
+
+.post-form button, .profile-details button, .admin-form button, .post-actions button {
+    padding: 8px 15px;
+    background-color: #E95B95;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+.post {
+    border-bottom: 1px solid #B4D1EC;
+    padding: 15px 0;
+}
+
+.post-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.post-header img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+.post-header h4 {
+    margin: 0;
+    color: #333;
+}
+
+.post-header small {
+    color: #666;
+}
+
+.post p {
+    margin: 10px 0;
+}
+
+.post-actions {
+    margin-top: 10px;
+}
+
+.comments {
+    margin-top: 10px;
+    padding-left: 20px;
+}
+
+.right-sidebar {
+    width: 20%;
+    background-color: #B4D1EC;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.right-sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.admin-form {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.admin-form label {
+    display: block;
+    margin: 10px 0 5px;
+    color: #333;
+}
+
+.admin-form input, .admin-form textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #89B1D6;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+.admin-form textarea {
+    height: 100px;
+}
