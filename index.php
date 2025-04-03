@@ -21,9 +21,7 @@ if (!empty($search)) {
 }
 $base_where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
-$total_query = "SELECT COUNT(*) as total 
-                FROM escorts e 
-                $base_where_clause";
+$total_query = "SELECT COUNT(*) as total FROM escorts e $base_where_clause";
 $stmt_total = $conn->prepare($total_query);
 if ($types) {
     $stmt_total->bind_param($types, ...$params);
@@ -31,6 +29,8 @@ if ($types) {
 $stmt_total->execute();
 $total_profiles = $stmt_total->get_result()->fetch_assoc()['total'];
 $total_pages = ceil($total_profiles / $items_per_page);
+
+$latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_assoc()['latest'] ?? 0;
 ?>
 
 <!DOCTYPE html>
@@ -41,40 +41,13 @@ $total_pages = ceil($total_profiles / $items_per_page);
     <title>Eskort - Banco de Dados de Pornstars e Acompanhantes</title>
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
     <style>
-        .suggestions {
-            position: absolute;
-            background: #fff;
-            border: 1px solid #B4D1EC;
-            border-radius: 5px;
-            max-height: 200px;
-            overflow-y: auto;
-            width: 250px;
-            z-index: 1000;
-            display: none;
-        }
-        .suggestions div {
-            padding: 8px;
-            cursor: pointer;
-        }
-        .suggestions div:hover {
-            background: #F6ECB2;
-        }
-        #loading {
-            text-align: center;
-            padding: 20px;
-            display: none;
-            color: #E95B95;
-        }
-        .top-bar {
-            justify-content: center;
-        }
-        .top-center {
-            flex-grow: 1;
-            max-width: 600px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .suggestions { position: absolute; background: #fff; border: 1px solid #B4D1EC; border-radius: 5px; max-height: 200px; overflow-y: auto; width: 250px; z-index: 1000; display: none; }
+        .suggestions div { padding: 8px; cursor: pointer; }
+        .suggestions div:hover { background: #F6ECB2; }
+        #loading { text-align: center; padding: 20px; display: none; color: #E95B95; }
+        .top-bar { justify-content: center; }
+        .top-center { flex-grow: 1; max-width: 600px; display: flex; align-items: center; gap: 10px; }
+        #notification { position: fixed; top: 60px; right: 20px; background: #E95B95; color: white; padding: 10px; border-radius: 5px; display: none; z-index: 1000; }
     </style>
 </head>
 <body>
@@ -93,6 +66,32 @@ $total_pages = ceil($total_profiles / $items_per_page);
         <div class="main-content">
             <div class="profiles-feed">
                 <div class="profiles-container">
+                    <div class="highlights-section">
+                        <h3>Destaques</h3>
+                        <div class="carousel">
+                            <button class="carousel-prev" onclick="carouselPrev()">◄</button>
+                            <div class="carousel-inner">
+                                <?php
+                                $highlight_query = "SELECT e.id, e.name, e.profile_photo FROM escorts e ORDER BY e.views DESC LIMIT 3";
+                                $highlight_result = $conn->query($highlight_query);
+                                while ($highlight = $highlight_result->fetch_assoc()) {
+                                    $photo = $highlight['profile_photo'] ?: 'uploads/default.jpg';
+                                    $photo_webp = str_replace('.jpg', '.webp', $photo);
+                                    echo "<div class='carousel-item'>";
+                                    echo "<a href='profile.php?id=" . $highlight['id'] . "'>";
+                                    echo "<picture>";
+                                    echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
+                                    echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($highlight['name']) . "' class='lazy-load'>";
+                                    echo "</picture>";
+                                    echo "<p>" . htmlspecialchars($highlight['name']) . "</p>";
+                                    echo "</a>";
+                                    echo "</div>";
+                                }
+                                ?>
+                            </div>
+                            <button class="carousel-next" onclick="carouselNext()">►</button>
+                        </div>
+                    </div>
                     <h3>Resultados (<?php echo $total_profiles; ?> encontrados)</h3>
                     <div class="feed-grid" id="profiles-grid">
                         <?php
@@ -149,6 +148,7 @@ $total_pages = ceil($total_profiles / $items_per_page);
     </div>
 
     <div id="profile-preview" class="profile-preview"></div>
+    <div id="notification">Novo perfil adicionado!</div>
 
     <button class="back-to-top" onclick="scrollToTop()">↑</button>
 
@@ -156,6 +156,7 @@ $total_pages = ceil($total_profiles / $items_per_page);
         let page = <?php echo $page; ?>;
         let loading = false;
         let totalPages = <?php echo $total_pages; ?>;
+        let latestPostId = <?php echo $latest_post_id; ?>;
 
         function filterProfiles() {
             const search = document.getElementById('search-input').value;
@@ -286,6 +287,35 @@ $total_pages = ceil($total_profiles / $items_per_page);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        function checkNewPosts() {
+            fetch('check_posts.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.latest_post_id > latestPostId) {
+                        latestPostId = data.latest_post_id;
+                        const notification = document.getElementById('notification');
+                        notification.style.display = 'block';
+                        setTimeout(() => notification.style.display = 'none', 3000);
+                    }
+                });
+        }
+
+        function carouselPrev() {
+            const items = document.querySelectorAll('.carousel-item');
+            let current = Array.from(items).findIndex(item => item.classList.contains('active'));
+            items[current].classList.remove('active');
+            current = (current - 1 + items.length) % items.length;
+            items[current].classList.add('active');
+        }
+
+        function carouselNext() {
+            const items = document.querySelectorAll('.carousel-item');
+            let current = Array.from(items).findIndex(item => item.classList.contains('active'));
+            items[current].classList.remove('active');
+            current = (current + 1) % items.length;
+            items[current].classList.add('active');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const backToTop = document.querySelector('.back-to-top');
             window.addEventListener('scroll', () => {
@@ -295,6 +325,8 @@ $total_pages = ceil($total_profiles / $items_per_page);
                 }
             });
             lazyLoadImages();
+            setInterval(checkNewPosts, 60000); // Checa novos posts a cada minuto
+            document.querySelector('.carousel-item').classList.add('active'); // Inicia carrossel
         });
     </script>
 </body>
