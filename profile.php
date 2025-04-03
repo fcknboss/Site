@@ -30,7 +30,7 @@ $stmt->bind_param("ii", $id, $user_id);
 $stmt->execute();
 $user_review = $stmt->get_result()->fetch_assoc();
 
-// Frase promocional (baseada em physical_traits ou um campo futuro)
+// Frase promocional
 $promo_phrases = [
     'loira' => 'Loirinha deliciosa!',
     'morena' => 'Morena sensual e provocante!',
@@ -39,7 +39,7 @@ $promo_phrases = [
     'olhos verdes' => 'Olhar irresistível!',
     'olhos castanhos' => 'Doce e envolvente!'
 ];
-$promo_phrase = 'Companhia inesquecível!'; // Default
+$promo_phrase = 'Companhia inesquecível!';
 if ($escort['physical_traits']) {
     $traits = array_map('trim', explode(',', $escort['physical_traits']));
     foreach ($traits as $trait) {
@@ -49,6 +49,10 @@ if ($escort['physical_traits']) {
         }
     }
 }
+
+// Formata o número para WhatsApp
+$phone_clean = preg_replace('/[^0-9]/', '', $escort['phone'] ?? '');
+$whatsapp_link = $phone_clean ? "https://wa.me/{$phone_clean}" : '#';
 ?>
 
 <!DOCTYPE html>
@@ -60,6 +64,13 @@ if ($escort['physical_traits']) {
     <link rel="stylesheet" href="style.css">
     <link rel="preload" href="style.css" as="style">
     <link rel="preload" href="script.js" as="script">
+    <link rel="preload" href="reviews.js" as="script">
+    <link rel="preload" href="posts.js" as="script">
+    <!-- Define variáveis globais para JavaScript -->
+    <script>
+        window.profileId = <?php echo $id; ?>;
+        window.userId = <?php echo $user_id; ?>;
+    </script>
 </head>
 <body>
     <?php include 'header.php'; ?>
@@ -67,7 +78,11 @@ if ($escort['physical_traits']) {
     <main class="profile-container">
         <section class="profile-header">
             <div class="profile-photo-container">
-                <img src="<?php echo htmlspecialchars($escort['profile_photo']); ?>" alt="<?php echo htmlspecialchars($escort['name']); ?>" loading="lazy">
+                <img src="<?php echo htmlspecialchars($escort['profile_photo']); ?>" alt="<?php echo htmlspecialchars($escort['name']); ?>" loading="lazy" id="profile-photo" data-original-src="<?php echo htmlspecialchars($escort['profile_photo']); ?>">
+                <?php if ($_SESSION['role'] === 'admin'): ?>
+                    <input type="file" id="profile-photo-upload" accept="image/*" style="display: none;" onchange="previewProfilePhoto(this)">
+                    <button class="edit-photo-btn" onclick="document.getElementById('profile-photo-upload').click();">Editar Foto</button>
+                <?php endif; ?>
             </div>
             <div class="profile-info">
                 <h1>
@@ -94,7 +109,18 @@ if ($escort['physical_traits']) {
                 <p class="promo-phrase"><?php echo $promo_phrase; ?></p>
                 <p class="location"><?php echo htmlspecialchars($escort['location']); ?> | <?php echo $escort['age']; ?> anos</p>
                 <p class="rates"><?php echo htmlspecialchars($escort['rates']); ?></p>
-                <p><strong>Telefone:</strong> <?php echo htmlspecialchars($escort['phone'] ?? 'Não informado'); ?></p>
+                <p>
+                    <?php if ($phone_clean): ?>
+                        <a href="<?php echo $whatsapp_link; ?>" target="_blank" rel="noopener" class="whatsapp-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.52 3.48A20.99 20.99 0 0 0 12 0C5.37 0 0 5.37 0 12c0 2.13.56 4.14 1.54 5.91L0 24l6.24-1.63A20.99 20.99 0 0 0 12 24c6.63 0 12-5.37 12-12a20.99 20.99 0 0 0-3.48-8.52zM12 21.9a17.99 17.99 0 0 1-9-2.4l-.44-.26-3.7.97.98-3.6-.26-.45a17.99 17.99 0 0 1-2.4-9A18 18 0 0 1 12 2.1a18 18 0 0 1 12 17.8c0 1-.08 1.98-.24 2.94zM17.92 17.9c-.3.15-1.78.87-2.06.97-.28.1-.48.15-.68-.15-.2-.3-.77-.97-1.5-1.17-.73-.2-1.36-.3-1.65-.6-.3-.3-.3-.77-.2-1.07.1-.3.23-.6.34-.9.1-.3.05-.6-.1-.87-.15-.27-.34-.6-.5-.9-.17-.3-.34-.6-.5-.87-.15-.27-.3-.57-.6-.6-.3-.03-.6-.03-.9-.03s-.6.1-.9.3c-.3.2-1.17.97-1.17 2.37s1.2 2.77 1.36 2.97c.17.2 2.37 3.6 5.77 5.06.8.34 1.43.54 1.92.7.8.26 1.53.23 2.1.13.64-.1 1.78-.73 2.03-1.43.25-.7.25-1.3.17-1.43-.07-.13-.27-.2-.6-.34z" fill="#28A745"/>
+                            </svg>
+                            <?php echo htmlspecialchars($escort['phone']); ?>
+                        </a>
+                    <?php else: ?>
+                        <span>Telefone não informado</span>
+                    <?php endif; ?>
+                </p>
                 <p><strong>Avaliação Média:</strong> <?php echo $avg_rating; ?>/5 (<?php echo $review_count; ?> avaliações)</p>
                 <div class="social-links">
                     <a href="https://instagram.com/<?php echo htmlspecialchars(strtolower(str_replace(' ', '', $escort['username']))); ?>" target="_blank" rel="noopener">Instagram</a>
@@ -160,7 +186,9 @@ if ($escort['physical_traits']) {
                 <textarea id="contact-message" placeholder="Envie uma mensagem..." required aria-label="Mensagem"></textarea>
                 <button type="submit">Enviar</button>
             </form>
-            <div id="contact-response"></div>
+            <div id="contact-response">
+                <div class="loader" id="contact-loader"></div>
+            </div>
         </section>
 
         <section class="profile-section">
@@ -205,8 +233,21 @@ if ($escort['physical_traits']) {
         </div>
     </div>
 
+    <div id="confirm-action" class="confirm-popup">
+        <div class="confirm-content">
+            <h3 id="confirm-title">Confirmar Ação</h3>
+            <p id="confirm-message">Tem certeza que deseja realizar esta ação?</p>
+            <div class="confirm-buttons">
+                <button id="confirm-yes">Sim</button>
+                <button onclick="closeConfirmAction()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <?php include 'footer.php'; ?>
 
+    <script src="reviews.js"></script>
+    <script src="posts.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
