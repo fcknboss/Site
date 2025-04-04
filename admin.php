@@ -51,12 +51,16 @@ if (!empty($filter_tag)) {
 $where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
 $total_query = "SELECT COUNT(*) as total FROM escorts e $where_clause";
-$stmt_total = $conn->prepare($total_query);
-if ($types) {
-    $stmt_total->bind_param($types, ...$params);
+try {
+    $stmt_total = $conn->prepare($total_query);
+    if ($types) {
+        $stmt_total->bind_param($types, ...$params);
+    }
+    $stmt_total->execute();
+    $total_escorts = $stmt_total->get_result()->fetch_assoc()['total'];
+} catch (mysqli_sql_exception $e) {
+    die("Erro ao contar escorts: " . $e->getMessage());
 }
-$stmt_total->execute();
-$total_escorts = $stmt_total->get_result()->fetch_assoc()['total'];
 $total_pages_escorts = ceil($total_escorts / $items_per_page);
 
 function getEscorts($conn, $offset, $limit, $where_clause, $types, $params) {
@@ -67,62 +71,87 @@ function getEscorts($conn, $offset, $limit, $where_clause, $types, $params) {
               $where_clause 
               ORDER BY e.views DESC 
               LIMIT ? OFFSET ?";
-    $stmt = $conn->prepare($query);
-    if ($types) {
-        $stmt->bind_param($types . 'ii', ...array_merge($params, [$limit, $offset]));
-    } else {
-        $stmt->bind_param('ii', $limit, $offset);
+    try {
+        $stmt = $conn->prepare($query);
+        if ($types) {
+            $stmt->bind_param($types . 'ii', ...array_merge($params, [$limit, $offset]));
+        } else {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    } catch (mysqli_sql_exception $e) {
+        die("Erro ao buscar escorts: " . $e->getMessage());
     }
-    $stmt->execute();
-    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 $escorts = getEscorts($conn, $offset_escorts, $items_per_page, $where_clause, $types, $params);
 
-$stats = $conn->query("SELECT 
-    (SELECT COUNT(*) FROM escorts WHERE type = 'acompanhante') as acompanhantes,
-    (SELECT COUNT(*) FROM escorts WHERE type = 'criadora') as pornstars,
-    (SELECT SUM(views) FROM escorts) as total_views,
-    (SELECT COUNT(*) FROM favorites WHERE admin_id = " . (int)$_SESSION['user_id'] . ") as favorites,
-    (SELECT COUNT(*) FROM messages WHERE receiver_id = " . (int)$_SESSION['user_id'] . " AND is_read = 0) as unread_messages,
-    (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules")->fetch_assoc();
+// Otimiza a query de stats
+$stats_query = "SELECT 
+    COUNT(CASE WHEN e.type = 'acompanhante' THEN 1 END) as acompanhantes,
+    COUNT(CASE WHEN e.type = 'criadora' THEN 1 END) as pornstars,
+    SUM(e.views) as total_views,
+    (SELECT COUNT(*) FROM favorites WHERE admin_id = ?) as favorites,
+    (SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND is_read = 0) as unread_messages,
+    (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules
+FROM escorts e";
+try {
+    $stmt_stats = $conn->prepare($stats_query);
+    $stmt_stats->bind_param("ii", $_SESSION['user_id'], $_SESSION['user_id']);
+    $stmt_stats->execute();
+    $stats = $stmt_stats->get_result()->fetch_assoc();
+} catch (mysqli_sql_exception $e) {
+    die("Erro ao buscar estatísticas: " . $e->getMessage());
+}
 
 if (!empty($filter_search)) {
-    $stmt = $conn->prepare("INSERT INTO search_log (admin_id, query) VALUES (?, ?)");
-    $stmt->bind_param("is", $_SESSION['user_id'], $filter_search);
-    $stmt->execute();
+    try {
+        $stmt = $conn->prepare("INSERT INTO search_log (admin_id, query) VALUES (?, ?)");
+        $stmt->bind_param("is", $_SESSION['user_id'], $filter_search);
+        $stmt->execute();
+    } catch (mysqli_sql_exception $e) {
+        error_log("Erro ao logar busca: " . $e->getMessage());
+    }
 }
 
 $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fetch_all(MYSQLI_ASSOC);
 
-// Verifica se a tabela photo_moderation existe
 $photo_moderation_exists = $conn->query("SHOW TABLES LIKE 'photo_moderation'")->num_rows > 0;
 $photos = [];
 if ($photo_moderation_exists) {
-    $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.status 
-                            FROM photos p 
-                            JOIN escorts e ON p.escort_id = e.id 
-                            LEFT JOIN photo_moderation pm ON p.id = pm.photo_id 
-                            WHERE pm.status IS NULL OR pm.status = 'pending' 
-                            ORDER BY p.id DESC 
-                            LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+    try {
+        $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.status 
+                                FROM photos p 
+                                JOIN escorts e ON p.escort_id = e.id 
+                                LEFT JOIN photo_moderation pm ON p.id = pm.photo_id 
+                                WHERE pm.status IS NULL OR pm.status = 'pending' 
+                                ORDER BY p.id DESC 
+                                LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+    } catch (mysqli_sql_exception $e) {
+        error_log("Erro ao buscar fotos para moderação: " . $e->getMessage());
+    }
 }
 
 if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
     $photo_ids = isset($_POST['photo_ids']) ? $_POST['photo_ids'] : [];
     $action = in_array($_POST['action'], ['approve', 'reject']) ? $_POST['action'] : 'pending';
     if (!empty($photo_ids)) {
-        $placeholders = implode(',', array_fill(0, count($photo_ids), '?'));
-        $stmt = $conn->prepare("INSERT INTO photo_moderation (photo_id, status) 
-                                VALUES (?, ?) 
-                                ON DUPLICATE KEY UPDATE status = VALUES(status), moderated_at = NOW()");
-        foreach ($photo_ids as $photo_id) {
-            $stmt->bind_param("is", $photo_id, $action);
-            $stmt->execute();
+        try {
+            $placeholders = implode(',', array_fill(0, count($photo_ids), '?'));
+            $stmt = $conn->prepare("INSERT INTO photo_moderation (photo_id, status) 
+                                    VALUES (?, ?) 
+                                    ON DUPLICATE KEY UPDATE status = VALUES(status), moderated_at = NOW()");
+            foreach ($photo_ids as $photo_id) {
+                $stmt->bind_param("is", $photo_id, $action);
+                $stmt->execute();
+            }
+            header("Location: admin.php#photo-moderation");
+            exit;
+        } catch (mysqli_sql_exception $e) {
+            error_log("Erro ao moderar fotos: " . $e->getMessage());
         }
     }
-    header("Location: admin.php#photo-moderation");
-    exit;
 }
 ?>
 
@@ -140,6 +169,13 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
         .widget:hover { transform: scale(1.05); }
         .widget canvas { max-height: 100px; }
         .admin-table th[aria-sort] { cursor: pointer; }
+        #import-result { margin-top: 10px; padding: 10px; border-radius: 5px; display: none; }
+        #import-result.success { background-color: #28A745; color: white; }
+        #import-result.error { background-color: #E95B95; color: white; }
+        .confirm-popup.active { display: flex; }
+        .confirm-buttons button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #delete-feedback { display: none; margin-top: 10px; }
+        .action-feedback { display: inline-block; margin-left: 5px; color: #28A745; }
     </style>
 </head>
 <body>
@@ -200,6 +236,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                     <input type="file" id="import-csv" accept=".csv" onchange="importCSV(this)" style="margin: 10px 0;" aria-label="Importar CSV de perfis">
                     <a href="edit_escort.php" class="btn" aria-label="Adicionar novo perfil">Adicionar Perfil</a>
                 </div>
+                <div id="import-result"></div>
                 <form class="filter-form" method="GET">
                     <input type="text" name="filter_search" value="<?php echo htmlspecialchars($filter_search); ?>" placeholder="Buscar por nome" aria-label="Buscar por nome">
                     <select name="filter_type" aria-label="Filtrar por tipo">
@@ -243,8 +280,8 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                                 <td><?php echo $escort['public_favorites']; ?></td>
                                 <td>
                                     <a href="edit_escort.php?id=<?php echo $escort['id']; ?>" class="btn" aria-label="Editar perfil <?php echo htmlspecialchars($escort['name']); ?>">Editar</a>
-                                    <button onclick="toggleFavorite(<?php echo $escort['id']; ?>)" class="btn" aria-label="Favoritar perfil <?php echo htmlspecialchars($escort['name']); ?>">Favoritar</button>
-                                    <button onclick="toggleHighlight(<?php echo $escort['id']; ?>)" class="btn" aria-label="Destacar perfil <?php echo htmlspecialchars($escort['name']); ?>">Destacar</button>
+                                    <button onclick="toggleFavorite(<?php echo $escort['id']; ?>, this)" class="btn" aria-label="Favoritar perfil <?php echo htmlspecialchars($escort['name']); ?>">Favoritar<span class="action-feedback" id="favorite-feedback-<?php echo $escort['id']; ?>"></span></button>
+                                    <button onclick="toggleHighlight(<?php echo $escort['id']; ?>, this)" class="btn" aria-label="Destacar perfil <?php echo htmlspecialchars($escort['name']); ?>">Destacar<span class="action-feedback" id="highlight-feedback-<?php echo $escort['id']; ?>"></span></button>
                                     <button onclick="showDeletePopup(<?php echo $escort['id']; ?>)" class="btn" aria-label="Excluir perfil <?php echo htmlspecialchars($escort['name']); ?>">Excluir</button>
                                 </td>
                             </tr>
@@ -305,18 +342,35 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
             <p>Tem certeza que deseja excluir este perfil?</p>
             <div class="confirm-buttons">
                 <button id="delete-yes" class="btn">Sim</button>
-                <button onclick="closeDeletePopup()" class="btn">Cancelar</button>
+                <button id="delete-cancel" class="btn" onclick="closeDeletePopup()">Cancelar</button>
             </div>
+            <p id="delete-feedback">Excluindo...</p>
         </div>
     </div>
 
     <script>
         let sortDirection = {};
+        let isDeleting = false;
 
         function showDeletePopup(id) {
+            if (isDeleting) return;
             const popup = document.getElementById('delete-popup');
+            const yesBtn = document.getElementById('delete-yes');
+            const cancelBtn = document.getElementById('delete-cancel');
+            const feedback = document.getElementById('delete-feedback');
+
             popup.classList.add('active');
-            document.getElementById('delete-yes').onclick = () => {
+            yesBtn.disabled = false;
+            cancelBtn.disabled = false;
+            feedback.style.display = 'none';
+
+            yesBtn.onclick = () => {
+                if (isDeleting) return;
+                isDeleting = true;
+                yesBtn.disabled = true;
+                cancelBtn.disabled = true;
+                feedback.style.display = 'block';
+
                 fetch('delete_escort.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -324,18 +378,41 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === 'success') location.reload();
-                    else alert(data.message);
-                    closeDeletePopup();
+                    if (data.status === 'success') {
+                        feedback.textContent = 'Perfil excluído com sucesso!';
+                        feedback.style.color = '#28A745';
+                        setTimeout(() => {
+                            closeDeletePopup();
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        feedback.textContent = 'Erro: ' + data.message;
+                        feedback.style.color = '#E95B95';
+                        yesBtn.disabled = false;
+                        cancelBtn.disabled = false;
+                        isDeleting = false;
+                    }
+                })
+                .catch(error => {
+                    feedback.textContent = 'Erro ao excluir: ' + error.message;
+                    feedback.style.color = '#E95B95';
+                    yesBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    isDeleting = false;
                 });
             };
         }
 
         function closeDeletePopup() {
-            document.getElementById('delete-popup').classList.remove('active');
+            if (isDeleting) return;
+            const popup = document.getElementById('delete-popup');
+            popup.classList.remove('active');
+            isDeleting = false;
         }
 
-        function toggleFavorite(id) {
+        function toggleFavorite(id, button) {
+            const feedback = document.getElementById(`favorite-feedback-${id}`);
+            feedback.textContent = 'Processando...';
             fetch('toggle_favorite.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -343,12 +420,24 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
             })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === 'success') location.reload();
-                    else alert(data.message);
+                    if (data.status === 'success') {
+                        feedback.textContent = '✓';
+                        setTimeout(() => feedback.textContent = '', 2000);
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        feedback.textContent = 'Erro: ' + data.message;
+                        feedback.style.color = '#E95B95';
+                    }
+                })
+                .catch(error => {
+                    feedback.textContent = 'Erro: ' + error.message;
+                    feedback.style.color = '#E95B95';
                 });
         }
 
-        function toggleHighlight(id) {
+        function toggleHighlight(id, button) {
+            const feedback = document.getElementById(`highlight-feedback-${id}`);
+            feedback.textContent = 'Processando...';
             fetch('toggle_highlight.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -356,8 +445,18 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
             })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === 'success') location.reload();
-                    else alert(data.message);
+                    if (data.status === 'success') {
+                        feedback.textContent = '✓';
+                        setTimeout(() => feedback.textContent = '', 2000);
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        feedback.textContent = 'Erro: ' + data.message;
+                        feedback.style.color = '#E95B95';
+                    }
+                })
+                .catch(error => {
+                    feedback.textContent = 'Erro: ' + error.message;
+                    feedback.style.color = '#E95B95';
                 });
         }
 
@@ -391,31 +490,64 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
             th.setAttribute('aria-sort', direction);
         }
 
+        function importCSV(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('csv_file', file);
+
+            const resultDiv = document.getElementById('import-result');
+            resultDiv.style.display = 'none';
+
+            fetch('import_escorts.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    resultDiv.style.display = 'block';
+                    if (data.status === 'success') {
+                        resultDiv.className = 'success';
+                        resultDiv.textContent = `Importação concluída! ${data.inserted} perfis inseridos, ${data.updated} atualizados.`;
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        resultDiv.className = 'error';
+                        resultDiv.textContent = `Erro na importação: ${data.message}`;
+                    }
+                })
+                .catch(error => {
+                    resultDiv.style.display = 'block';
+                    resultDiv.className = 'error';
+                    resultDiv.textContent = 'Erro ao processar o arquivo CSV: ' + error.message;
+                });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const acompanhantesChart = new Chart(document.getElementById('acompanhantes-chart'), {
                 type: 'doughnut',
                 data: { labels: ['Acompanhantes'], datasets: [{ data: [<?php echo $stats['acompanhantes']; ?>], backgroundColor: ['#E95B95'] }] },
-                options: { legend: { display: false }, cutoutPercentage: 70 }
+                options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const pornstarsChart = new Chart(document.getElementById('pornstars-chart'), {
                 type: 'doughnut',
                 data: { labels: ['Pornstars'], datasets: [{ data: [<?php echo $stats['pornstars']; ?>], backgroundColor: ['#E95B95'] }] },
-                options: { legend: { display: false }, cutoutPercentage: 70 }
+                options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const viewsChart = new Chart(document.getElementById('views-chart'), {
                 type: 'doughnut',
                 data: { labels: ['Visualizações'], datasets: [{ data: [<?php echo $stats['total_views']; ?>], backgroundColor: ['#E95B95'] }] },
-                options: { legend: { display: false }, cutoutPercentage: 70 }
+                options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const favoritesChart = new Chart(document.getElementById('favorites-chart'), {
                 type: 'doughnut',
                 data: { labels: ['Favoritos'], datasets: [{ data: [<?php echo $stats['favorites']; ?>], backgroundColor: ['#E95B95'] }] },
-                options: { legend: { display: false }, cutoutPercentage: 70 }
+                options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const schedulesChart = new Chart(document.getElementById('schedules-chart'), {
                 type: 'doughnut',
                 data: { labels: ['Agendamentos'], datasets: [{ data: [<?php echo $stats['pending_schedules']; ?>], backgroundColor: ['#E95B95'] }] },
-                options: { legend: { display: false }, cutoutPercentage: 70 }
+                options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
         });
     </script>
