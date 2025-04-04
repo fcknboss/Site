@@ -1,30 +1,60 @@
 <?php
 // config.php
 
+// Configurações do banco de dados
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
-define('DB_PASS', ''); // Recomendo usar uma senha em produção
-define('DB_NAME', 'eskort');
+define('DB_PASS', '');
+define('DB_NAME', 'eskort_db');
 
-// Função para conectar ao banco
+// Conexão ao banco de dados
 function getDBConnection() {
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS);
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
     if ($conn->connect_error) {
-        logError("Erro de conexão: " . $conn->connect_error);
-        die("Erro de conexão. Veja o log para detalhes.");
+        logError("Falha na conexão com o banco: " . $conn->connect_error);
+        die("Erro interno. Veja o log para detalhes.");
     }
-    // Seleciona o banco de dados ou cria se não existir
-    if (!$conn->select_db(DB_NAME)) {
-        $conn->query("CREATE DATABASE IF NOT EXISTS " . DB_NAME) or die("Erro ao criar o banco: " . $conn->error);
-        $conn->select_db(DB_NAME) or die("Erro ao selecionar o banco após criação: " . $conn->error);
-    }
+    $conn->set_charset("utf8");
     return $conn;
 }
 
-// Função para logging
-function logError($message) {
-    $log_file = __DIR__ . '/error_log.txt';
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($log_file, "[$timestamp] $message\n", FILE_APPEND);
+// Configurações gerais
+date_default_timezone_set('America/Sao_Paulo');
+ini_set('upload_max_filesize', '50M');
+ini_set('post_max_size', '50M');
+
+// Sanitização de entradas
+function sanitize($input) {
+    global $conn;
+    return htmlspecialchars(mysqli_real_escape_string($conn, trim($input)), ENT_QUOTES, 'UTF-8');
 }
+
+// Função de log de erro
+function logError($message, $file = 'eskort_errors.log') {
+    $log_dir = 'C:\xampp\htdocs\eskort\Site\logs';
+    if (!is_dir($log_dir)) {
+        mkdir($log_dir, 0777, true);
+    }
+    $log_file = "$log_dir/$file";
+    $timestamp = date('Y-m-d H:i:s');
+    $entry = "[$timestamp] " . $message . " | IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A') . " | User: " . ($_SESSION['username'] ?? 'N/A') . "\n";
+    file_put_contents($log_file, $entry, FILE_APPEND | LOCK_EX);
+}
+
+// Configuração de erros do PHP
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', 'C:\xampp\php\logs\php_error.log');
+
+// Handler de erros customizado
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    logError("Erro PHP [$errno]: $errstr em $errfile:$errline");
+    return true; // Suprime exibição do erro
+});
+
+// Handler de exceções
+set_exception_handler(function($exception) {
+    logError("Exceção: " . $exception->getMessage() . " em " . $exception->getFile() . ":" . $exception->getLine());
+    die("Erro interno. Veja o log para detalhes.");
+});
 ?>

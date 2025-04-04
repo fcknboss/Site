@@ -14,6 +14,7 @@ function checkDB($conn) {
     $tables = ['escorts', 'users', 'favorites', 'messages', 'schedules', 'photos', 'photo_moderation', 'search_log', 'categories'];
     foreach ($tables as $table) {
         if ($conn->query("SHOW TABLES LIKE '$table'")->num_rows == 0) {
+            logError("Tabela '$table' não existe no banco de dados.");
             die("<div class='container'><div class='main-content error-box'><h1>Erro no Banco</h1><p>Tabela '$table' não existe. Configure no phpMyAdmin.</p></div></div>");
         }
     }
@@ -54,7 +55,7 @@ $where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 // Total de escorts
 $stmt = $conn->prepare("SELECT COUNT(*) as total FROM escorts e $where_clause");
 if ($types) $stmt->bind_param($types, ...$params);
-$stmt->execute();
+$stmt->execute() or logError("Erro ao contar escorts: " . $conn->error);
 $total_escorts = $stmt->get_result()->fetch_assoc()['total'];
 $total_pages = ceil($total_escorts / $items_per_page);
 
@@ -70,7 +71,7 @@ $stmt = $conn->prepare("SELECT e.id, e.name, e.type, e.is_online, e.views, e.lat
                        LIMIT ? OFFSET ?");
 if ($types) $stmt->bind_param($types . 'ii', ...array_merge($params, [$items_per_page, $offset]));
 else $stmt->bind_param('ii', $items_per_page, $offset);
-$stmt->execute();
+$stmt->execute() or logError("Erro ao buscar escorts: " . $conn->error);
 $escorts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // Estatísticas
@@ -82,14 +83,14 @@ $stmt = $conn->prepare("SELECT COUNT(CASE WHEN e.type = 'acompanhante' THEN 1 EN
                               (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules
                        FROM escorts e");
 $stmt->bind_param("ii", $_SESSION['user_id'], $_SESSION['user_id']);
-$stmt->execute();
+$stmt->execute() or logError("Erro ao buscar estatísticas: " . $conn->error);
 $stats = $stmt->get_result()->fetch_assoc();
 
 // Log de busca
 if ($filters['search']) {
     $stmt = $conn->prepare("INSERT INTO search_log (admin_id, query) VALUES (?, ?)");
     $stmt->bind_param("is", $_SESSION['user_id'], $filters['search']);
-    $stmt->execute();
+    $stmt->execute() or logError("Erro ao logar busca: " . $conn->error);
 }
 
 // Categorias e moderação de fotos
@@ -103,7 +104,10 @@ $photos = $conn->query("SHOW TABLES LIKE 'photo_moderation'")->num_rows > 0
     : [];
 
 if (isset($_POST['moderate_photos']) && $photos) {
-    if ($_POST['csrf_token'] !== $_SESSION['csrf_token']) die("Erro: Token CSRF inválido.");
+    if ($_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        logError("Token CSRF inválido na moderação de fotos.");
+        die("Erro: Token CSRF inválido.");
+    }
     $photo_ids = $_POST['photo_ids'] ?? [];
     $action = in_array($_POST['action'], ['approve', 'reject']) ? $_POST['action'] : 'pending';
     if ($photo_ids) {
@@ -111,11 +115,11 @@ if (isset($_POST['moderate_photos']) && $photos) {
                                 ON DUPLICATE KEY UPDATE status = ?, moderated_at = NOW()");
         foreach ($photo_ids as $photo_id) {
             $stmt->bind_param("iss", $photo_id, $action, $action);
-            $stmt->execute();
+            $stmt->execute() or logError("Erro ao moderar foto ID $photo_id: " . $conn->error);
         }
         $notification = json_encode(['type' => 'photo_moderation', 'message' => "Fotos moderadas: " . count($photo_ids) . " como '$action' por " . $_SESSION['username']]);
         if (@file_get_contents("http://localhost:8080?msg=" . urlencode($notification)) === false) {
-            error_log("Erro ao enviar notificação WebSocket: " . error_get_last()['message']);
+            logError("Falha ao enviar notificação WebSocket: " . error_get_last()['message']);
         }
         header("Location: admin.php#photo-moderation");
         exit;
