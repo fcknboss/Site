@@ -199,6 +199,7 @@ if (isset($_POST['moderate_photos']) && $photos) {
                     <input type="number" name="filter_views_min" value="<?php echo $filters['views_min']; ?>" placeholder="Views mín">
                     <input type="text" name="filter_tag" value="<?php echo htmlspecialchars($filters['tag']); ?>" placeholder="Tag">
                     <button type="submit" class="btn">Filtrar</button>
+                    <button type="button" class="btn" onclick="resetFilters()">Limpar</button>
                 </form>
                 <table class="admin-table">
                     <thead>
@@ -432,6 +433,11 @@ if (isset($_POST['moderate_photos']) && $photos) {
                         Toastify({ text: "Erro ao carregar: " + d.message, duration: 3000, style: { background: "#DC3545" } }).showToast();
                     }
                 });
+        }
+
+        function resetFilters() {
+            document.querySelector('.filter-form').reset();
+            window.location.href = 'admin.php?page_escorts=<?php echo $page; ?>';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
