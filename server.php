@@ -3,6 +3,9 @@ use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+// Ensure the required Ratchet package is installed
+exec('composer require cboden/ratchet');
+
 class NotificationServer implements MessageComponentInterface {
     private $clients;
 

@@ -44,15 +44,19 @@ $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
             <button onclick="exportChart('views-chart', 'Visualizações')" class="export-btn">Exportar PNG (Views)</button>
             <button onclick="exportChart('search-chart', 'Buscas')" class="export-btn">Exportar PNG (Buscas)</button>
             <button onclick="exportChart('ratings-chart', 'Avaliações')" class="export-btn">Exportar PNG (Ratings)</button>
+            <button onclick="exportChart('messages-chart', 'Mensagens')" class="export-btn">Exportar PNG (Mensagens)</button>
+            <button onclick="exportChart('favorites-chart', 'Favoritos')" class="export-btn">Exportar PNG (Favoritos)</button>
             <button onclick="exportExcel()" class="export-btn">Exportar Excel</button>
             <canvas id="views-chart" style="max-width: 600px;"></canvas>
             <canvas id="search-chart" style="max-width: 600px;"></canvas>
             <canvas id="ratings-chart" style="max-width: 600px;"></canvas>
+            <canvas id="messages-chart" style="max-width: 600px;"></canvas>
+            <canvas id="favorites-chart" style="max-width: 600px;"></canvas>
         </div>
     </div>
 
     <script>
-        let viewsData, searchData, ratingsData;
+        let viewsData, searchData, ratingsData, messagesData, favoritesData;
 
         document.addEventListener('DOMContentLoaded', () => {
             fetch('report_data.php?start_date=<?php echo urlencode($start_date); ?>&end_date=<?php echo urlencode($end_date); ?>')
@@ -64,11 +68,7 @@ $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
                         type: 'bar',
                         data: {
                             labels: data.map(item => item.name),
-                            datasets: [{
-                                label: 'Visualizações',
-                                data: data.map(item => item.views),
-                                backgroundColor: '#E95B95'
-                            }]
+                            datasets: [{ label: 'Visualizações', data: data.map(item => item.views), backgroundColor: '#E95B95' }]
                         },
                         options: {
                             scales: { y: { beginAtZero: true } },
@@ -92,18 +92,14 @@ $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
                         type: 'bar',
                         data: {
                             labels: Object.keys(data),
-                            datasets: [{
-                                label: 'Frequência de Buscas',
-                                data: Object.values(data),
-                                backgroundColor: '#E95B95'
-                            }]
+                            datasets: [{ label: 'Frequência de Buscas', data: Object.values(data), backgroundColor: '#E95B95' }]
                         },
                         options: {
                             scales: { y: { beginAtZero: true } },
                             plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } } },
                             onClick: (e, elements) => {
                                 if (elements.length > 0) {
-                                    const index = elements[0].index;
+                                    const index = elements[sapostar0].index;
                                     const term = Object.keys(data)[index];
                                     alert(`Termo: ${term}\nFrequência: ${data[term]}`);
                                 }
@@ -121,11 +117,7 @@ $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
                         type: 'bar',
                         data: {
                             labels: data.map(item => item.name),
-                            datasets: [{
-                                label: 'Média de Avaliações',
-                                data: data.map(item => item.avg_rating),
-                                backgroundColor: '#E95B95'
-                            }]
+                            datasets: [{ label: 'Média de Avaliações', data: data.map(item => item.avg_rating), backgroundColor: '#E95B95' }]
                         },
                         options: {
                             scales: { y: { beginAtZero: true, max: 5 } },
@@ -134,6 +126,48 @@ $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
                                 if (elements.length > 0) {
                                     const index = elements[0].index;
                                     alert(`Perfil: ${data[index].name}\nMédia: ${data[index].avg_rating}\nTotal: ${data[index].total_reviews}`);
+                                }
+                            }
+                        }
+                    });
+                });
+
+            fetch('messages_data.php?start_date=<?php echo urlencode($start_date); ?>&end_date=<?php echo urlencode($end_date); ?>')
+                .then(response => response.json())
+                .then(data => {
+                    messagesData = data;
+                    const ctx = document.getElementById('messages-chart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Enviadas', 'Recebidas'],
+                            datasets: [{ label: 'Mensagens', data: [data.sent, data.received], backgroundColor: '#E95B95' }]
+                        },
+                        options: {
+                            scales: { y: { beginAtZero: true } },
+                            plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } } }
+                        }
+                    });
+                });
+
+            fetch('favorites_data.php?start_date=<?php echo urlencode($start_date); ?>&end_date=<?php echo urlencode($end_date); ?>')
+                .then(response => response.json())
+                .then(data => {
+                    favoritesData = data;
+                    const ctx = document.getElementById('favorites-chart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(item => item.name),
+                            datasets: [{ label: 'Favoritos', data: data.map(item => item.favorite_count), backgroundColor: '#E95B95' }]
+                        },
+                        options: {
+                            scales: { y: { beginAtZero: true } },
+                            plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } } },
+                            onClick: (e, elements) => {
+                                if (elements.length > 0) {
+                                    const index = elements[0].index;
+                                    alert(`Perfil: ${data[index].name}\nFavoritos: ${data[index].favorite_count}`);
                                 }
                             }
                         }
@@ -155,6 +189,8 @@ $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
             const searchArray = Object.entries(searchData).map(([query, count]) => ({ Query: query, Count: count }));
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(searchArray), 'Buscas');
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ratingsData), 'Avaliações');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([messagesData]), 'Mensagens');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(favoritesData), 'Favoritos');
             XLSX.writeFile(wb, `relatorio_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
     </script>

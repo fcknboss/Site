@@ -5,7 +5,7 @@
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
-define('DB_NAME', 'eskort_db');
+define('DB_NAME', 'eskort'); // Ajustado de 'eskort_db' para 'eskort'
 
 // Conexão ao banco de dados
 function getDBConnection() {
@@ -26,7 +26,7 @@ ini_set('post_max_size', '50M');
 // Sanitização de entradas
 function sanitize($input) {
     global $conn;
-    return htmlspecialchars(mysqli_real_escape_string($conn, trim($input)), ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars(mysqli_real_escape_string($conn, trim($input ?? '')), ENT_QUOTES, 'UTF-8');
 }
 
 // Função de log de erro
@@ -49,7 +49,7 @@ ini_set('error_log', 'C:\xampp\php\logs\php_error.log');
 // Handler de erros customizado
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     logError("Erro PHP [$errno]: $errstr em $errfile:$errline");
-    return true; // Suprime exibição do erro
+    return true;
 });
 
 // Handler de exceções

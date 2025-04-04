@@ -12,6 +12,9 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $category = isset($_GET['category']) ? (int)$_GET['category'] : 0;
 $availability = isset($_GET['availability']) ? trim($_GET['availability']) : '';
 $language = isset($_GET['language']) ? trim($_GET['language']) : '';
+$rate_min = isset($_GET['rate_min']) ? (float)$_GET['rate_min'] : 0;
+$rate_max = isset($_GET['rate_max']) ? (float)$_GET['rate_max'] : 0;
+$physical_traits = isset($_GET['physical_traits']) ? trim($_GET['physical_traits']) : '';
 $order = in_array($_GET['order'] ?? '', ['views', 'name', 'distance']) ? $_GET['order'] : 'views';
 $age_min = isset($_GET['age_min']) ? (int)$_GET['age_min'] : 0;
 $views_min = isset($_GET['views_min']) ? (int)$_GET['views_min'] : 0;
@@ -48,6 +51,21 @@ if (!empty($availability)) {
 if (!empty($language)) {
     $where[] = "e.languages LIKE ?";
     $params[] = '%' . $language . '%';
+    $types .= 's';
+}
+if ($rate_min > 0) {
+    $where[] = "CAST(REGEXP_REPLACE(e.rates, '[^0-9.]', '') AS DECIMAL) >= ?";
+    $params[] = $rate_min;
+    $types .= 'd';
+}
+if ($rate_max > 0) {
+    $where[] = "CAST(REGEXP_REPLACE(e.rates, '[^0-9.]', '') AS DECIMAL) <= ?";
+    $params[] = $rate_max;
+    $types .= 'd';
+}
+if (!empty($physical_traits)) {
+    $where[] = "e.physical_traits LIKE ?";
+    $params[] = '%' . $physical_traits . '%';
     $types .= 's';
 }
 if ($age_min > 0) {
@@ -95,39 +113,7 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
 </head>
 <body>
-    <div class="top-bar">
-        <div class="top-center">
-            <h2>Eskort</h2>
-            <div style="position: relative; flex-grow: 1;">
-                <input type="text" id="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="Busque por nome..." onkeyup="suggest(this.value, 'search')">
-                <div id="search-suggestions" class="suggestions"></div>
-            </div>
-            <div style="position: relative;">
-                <input type="text" id="keyword-input" value="<?php echo htmlspecialchars($keyword); ?>" placeholder="Busque por palavra-chave..." onkeyup="suggest(this.value, 'keyword')">
-                <div id="keyword-suggestions" class="suggestions"></div>
-            </div>
-            <select id="category-filter">
-                <option value="0">Todas as Categorias</option>
-                <?php foreach ($categories as $cat): ?>
-                    <option value="<?php echo $cat['id']; ?>" <?php echo $category == $cat['id'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($cat['name']); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <input type="text" id="availability-filter" value="<?php echo htmlspecialchars($availability); ?>" placeholder="Disponibilidade (ex: Seg-Sex)">
-            <input type="text" id="language-filter" value="<?php echo htmlspecialchars($language); ?>" placeholder="Idioma (ex: Português)">
-            <select id="order-filter">
-                <option value="views" <?php echo $order === 'views' ? 'selected' : ''; ?>>Mais Vistos</option>
-                <option value="name" <?php echo $order === 'name' ? 'selected' : ''; ?>>Nome</option>
-                <option value="distance" <?php echo $order === 'distance' ? 'selected' : ''; ?>>Proximidade</option>
-            </select>
-            <input type="number" id="age-min-filter" value="<?php echo $age_min; ?>" placeholder="Idade Mínima" min="18" style="width: 100px;">
-            <input type="number" id="views-min-filter" value="<?php echo $views_min; ?>" placeholder="Views Mínimos" min="0" style="width: 100px;">
-            <input type="number" id="radius-filter" value="<?php echo $radius; ?>" placeholder="Raio (km)" min="1" style="width: 100px;">
-            <button onclick="filterProfiles()">🔍</button>
-            <button onclick="getUserLocation()" class="geo-btn">📍 Perto de Mim</button>
-        </div>
-    </div>
+    <?php include 'header.php'; ?>
 
     <div class="container">
         <div class="main-content">
@@ -139,10 +125,12 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
                             <button class="carousel-prev" onclick="carouselPrev()">◄</button>
                             <div class="carousel-inner">
                                 <?php
+                                // Query ajustada para não usar is_public até que o banco seja atualizado
                                 $highlight_query = "SELECT e.id, e.name, e.profile_photo 
                                                     FROM escorts e 
-                                                    WHERE e.views > 0 
-                                                    ORDER BY e.views DESC, e.id DESC 
+                                                    JOIN favorites f ON e.id = f.escort_id 
+                                                    GROUP BY e.id 
+                                                    ORDER BY COUNT(f.id) DESC 
                                                     LIMIT 3";
                                 $highlight_result = $conn->query($highlight_query);
                                 while ($highlight = $highlight_result->fetch_assoc()) {
@@ -154,7 +142,7 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
                                     echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
                                     echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($highlight['name']) . "' class='lazy-load'>";
                                     echo "</picture>";
-                                    echo "<p>" . htmlspecialchars($highlight['name']) . "</p>";
+                                    echo "<p>" . htmlspecialchars($highlight['name']) . " (Favoritado)</p>";
                                     echo "</a>";
                                     echo "</div>";
                                 }
@@ -175,7 +163,8 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
                         }
 
                         $query = "SELECT e.id, e.name, e.profile_photo, e.description, e.type, e.is_online, e.views, e.tags, e.latitude, e.longitude, 
-                                         (SELECT GROUP_CONCAT(photo_path) FROM photos p WHERE p.escort_id = e.id LIMIT 2) as additional_photos 
+                                         (SELECT GROUP_CONCAT(photo_path) FROM photos p WHERE p.escort_id = e.id LIMIT 2) as additional_photos,
+                                         (SELECT COUNT(*) FROM favorites f WHERE f.escort_id = e.id) as favorite_count 
                                   FROM escorts e 
                                   LEFT JOIN escort_categories ec ON e.id = ec.escort_id 
                                   LEFT JOIN keywords k ON e.id = k.escort_id 
@@ -215,7 +204,7 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
                                 echo "</div>";
                                 echo "<h4>" . htmlspecialchars($row['name']) . "</h4>";
                                 echo "</a>";
-                                echo "<p>" . ($row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $row['views'] . " views" . ($distance ? " • $distance km" : "") . "</p>";
+                                echo "<p>" . ($row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $row['views'] . " views" . ($distance ? " • $distance km" : "") . ($row['favorite_count'] > 0 ? " • {$row['favorite_count']} favoritos" : "") . "</p>";
                                 echo "<span class='online-status " . ($row['is_online'] ? 'online' : 'offline') . "'>" . ($row['is_online'] ? 'Online' : 'Offline') . "</span>";
                                 echo "</div>";
 
@@ -296,11 +285,14 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
             const category = document.getElementById('category-filter').value;
             const availability = document.getElementById('availability-filter').value;
             const language = document.getElementById('language-filter').value;
+            const rateMin = document.getElementById('rate-min-filter').value;
+            const rateMax = document.getElementById('rate-max-filter').value;
+            const physicalTraits = document.getElementById('physical-traits-filter').value;
             const order = document.getElementById('order-filter').value;
             const ageMin = document.getElementById('age-min-filter').value;
             const viewsMin = document.getElementById('views-min-filter').value;
             const radius = document.getElementById('radius-filter').value;
-            window.location.href = `?search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
+            window.location.href = `?search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&rate_min=${rateMin}&rate_max=${rateMax}&physical_traits=${encodeURIComponent(physicalTraits)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
         }
 
         function suggest(query, type) {
@@ -337,11 +329,14 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
             const category = document.getElementById('category-filter').value;
             const availability = document.getElementById('availability-filter').value;
             const language = document.getElementById('language-filter').value;
+            const rateMin = document.getElementById('rate-min-filter').value;
+            const rateMax = document.getElementById('rate-max-filter').value;
+            const physicalTraits = document.getElementById('physical-traits-filter').value;
             const order = document.getElementById('order-filter').value;
             const ageMin = document.getElementById('age-min-filter').value;
             const viewsMin = document.getElementById('views-min-filter').value;
             const radius = document.getElementById('radius-filter').value;
-            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
+            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&rate_min=${rateMin}&rate_max=${rateMax}&physical_traits=${encodeURIComponent(physicalTraits)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
 
             const cached = localStorage.getItem(url);
             if (cached) {
@@ -390,7 +385,7 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
                         </div>
                         <h4>${profile.name}</h4>
                     </a>
-                    <p>${profile.type === 'acompanhante' ? 'Acompanhante' : 'Pornstar'} • ${profile.views} views${profile.distance ? ' • ' + profile.distance + ' km' : ''}</p>
+                    <p>${profile.type === 'acompanhante' ? 'Acompanhante' : 'Pornstar'} • ${profile.views} views${profile.distance ? ' • ' + profile.distance + ' km' : ''}${profile.favorite_count > 0 ? ' • ' + profile.favorite_count + ' favoritos' : ''}</p>
                     <span class="online-status ${profile.is_online ? 'online' : 'offline'}">${profile.is_online ? 'Online' : 'Offline'}</span>
                 `;
                 grid.appendChild(card);

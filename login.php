@@ -28,6 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
 
+        // Registra o login bem-sucedido no log do banco
+        $details = json_encode(['username' => $username, 'role' => $user['role']]);
+        logDBAction("LOGIN_SUCCESS", "users", $user['id'], $details);
+
         // Redireciona com base no papel do usuário
         if ($user['role'] === 'admin') {
             header("Location: admin.php");
@@ -36,6 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     } else {
+        // Registra tentativa de login falhada
+        $details = json_encode(['username' => $username, 'ip' => $_SERVER['REMOTE_ADDR']]);
+        logDBAction("LOGIN_FAIL", "users", null, $details);
         $error = "Usuário ou senha inválidos.";
     }
 }
@@ -47,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Eskort</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
 </head>
 <body>
     <div class="login-container">
