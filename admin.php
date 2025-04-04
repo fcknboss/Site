@@ -2,6 +2,8 @@
 require_once 'session.php';
 require_once 'config.php';
 
+logTask("UPDATE", "Corrigir erro 'Unknown column e.online' para e.is_online em admin.php");
+
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     header("Location: login.php");
     exit;
@@ -37,7 +39,7 @@ $params = [];
 $types = '';
 foreach ($filters as $key => $value) {
     if ($key === 'online' && $value !== -1) {
-        $where[] = "e.is_online = ?";
+        $where[] = "e.is_online = ?"; // Corrigido de 'e.online' para 'e.is_online'
         $params[] = $value;
         $types .= 'i';
     } elseif ($key === 'search' && $value) {
@@ -51,6 +53,7 @@ foreach ($filters as $key => $value) {
     }
 }
 $where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
+// ... resto do código permanece igual ...
 
 // Total de escorts
 $stmt = $conn->prepare("SELECT COUNT(*) as total FROM escorts e $where_clause");

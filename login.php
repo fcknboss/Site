@@ -1,16 +1,16 @@
 <?php
 session_start();
-require_once 'config.php'; // Inclui config.php com logDBAction()
+require_once 'config.php';
 
-// Conexão com o banco
+logTask("UPDATE", "Substituir FILTER_SANITIZE_STRING por sanitize() em login.php");
+
 $conn = getDBConnection();
 
-// Verifica se o formulário foi enviado
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
+    $username = sanitize($_POST['username'] ?? '');
     $password = $_POST['password'];
+    // ... resto do código permanece igual ...
 
-    // Prepara a consulta para buscar o usuário
     $stmt = $conn->prepare("SELECT id, username, password, role FROM users WHERE username = ?");
     if (!$stmt) {
         logError("Erro ao preparar a consulta: " . $conn->error);
@@ -21,17 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
 
-    // Verifica se o usuário existe e a senha está correta
     if ($user && password_verify($password, $user['password'])) {
-        // Inicia a sessão com os dados do usuário
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
-
-        // Registra o login bem-sucedido no db_log
         logDBAction("LOGIN", "users", $user['id'], "Login bem-sucedido");
-
-        // Redireciona com base no papel do usuário
         if ($user['role'] === 'admin') {
             header("Location: admin.php");
         } else {
@@ -40,7 +34,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     } else {
         $error = "Usuário ou senha inválidos.";
-        // Registra tentativa de login falha no db_log
         logDBAction("LOGIN_ATTEMPT", "users", null, "Tentativa de login falha para username: '$username'");
     }
 }
@@ -58,20 +51,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-container">
         <h2>Login</h2>
         <?php if (isset($error)): ?>
-            <p class="error"><?php echo htmlspecialchars($error); ?></p>
+            <p class="error" role="alert"><?php echo htmlspecialchars($error); ?></p>
         <?php endif; ?>
-        <form method="post" action="login.php">
+        <form method="post" action="login.php" role="form" aria-labelledby="login-title">
+            <h2 id="login-title" style="display: none;">Formulário de Login</h2> <!-- Título oculto para acessibilidade -->
             <div class="form-group">
-                <label for="username">Usuário:</label>
-                <input type="text" id="username" name="username" required>
+                <label for="username" id="username-label">Usuário:</label>
+                <input type="text" id="username" name="username" required aria-required="true" aria-labelledby="username-label">
             </div>
             <div class="form-group">
-                <label for="password">Senha:</label>
-                <input type="password" id="password" name="password" required>
+                <label for="password" id="password-label">Senha:</label>
+                <input type="password" id="password" name="password" required aria-required="true" aria-labelledby="password-label">
             </div>
-            <button type="submit">Entrar</button>
+            <button type="submit" aria-label="Entrar no sistema">Entrar</button>
         </form>
-        <p>Não tem conta? <a href="register.php">Cadastre-se</a></p>
+        <p>Não tem conta? <a href="register.php" aria-label="Ir para página de cadastro">Cadastre-se</a></p>
     </div>
 </body>
 </html>

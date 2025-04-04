@@ -52,10 +52,36 @@ function logDBAction($action, $table_name, $record_id = null, $details = null) {
     $conn->close();
 }
 
+// Variável global para acumular logs de tarefas
+$task_logs = [];
+
+// Função de log de tarefas
+function logTask($action, $details, $file = 'task_log.log') {
+    global $task_logs;
+    $timestamp = date('Y-m-d H:i:s');
+    $entry = "[$timestamp] Tarefa: $action | Detalhes: $details | Executado por: Grok (ID 999)";
+    $task_logs[] = $entry; // Acumula logs em vez de escrever imediatamente
+}
+
+// Função para registrar todos os logs acumulados ao final
+function saveTaskLogs($file = 'task_log.log') {
+    global $task_logs;
+    if (!empty($task_logs)) {
+        $log_dir = 'C:\xampp\htdocs\eskort\Site\logs';
+        if (!is_dir($log_dir)) {
+            mkdir($log_dir, 0777, true);
+        }
+        $log_file = "$log_dir/$file";
+        $full_entry = implode("\n", $task_logs) . "\n";
+        file_put_contents($log_file, $full_entry, FILE_APPEND | LOCK_EX);
+        $task_logs = []; // Limpa após salvar
+    }
+}
+
 // Configuração de erros do PHP
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-ini_set('error_log', 'C:\xampp\php\logs\php_error.log');
+ini_set('error_log', 'C:\xampp\htdocs\eskort\Site\logs\php_error.log');
 
 // Handler de erros customizado
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
@@ -68,4 +94,7 @@ set_exception_handler(function($exception) {
     logError("Exceção: " . $exception->getMessage() . " em " . $exception->getFile() . ":" . $exception->getLine());
     die("Erro interno. Veja o log para detalhes.");
 });
+
+// Registro das tarefas será salvo ao final da execução deste arquivo
+register_shutdown_function('saveTaskLogs');
 ?>
