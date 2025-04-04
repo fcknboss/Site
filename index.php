@@ -1,107 +1,138 @@
 <?php
+require_once 'session.php';
 require_once 'config.php';
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header("Location: login.php");
+    exit;
+}
 
 $conn = getDBConnection();
 
-$items_per_page = 12;
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+// Verifica integridade do banco
+function checkDB($conn) {
+    $tables = ['escorts', 'users', 'favorites', 'messages', 'schedules', 'photos', 'photo_moderation', 'search_log', 'categories'];
+    foreach ($tables as $table) {
+        if ($conn->query("SHOW TABLES LIKE '$table'")->num_rows == 0) {
+            logError("Tabela '$table' não existe no banco de dados.");
+            die("<div class='container'><div class='main-content error-box'><h1>Erro no Banco</h1><p>Tabela '$table' não existe. Configure no phpMyAdmin.</p></div></div>");
+        }
+    }
+}
+checkDB($conn);
+
+// Configuração de paginação e filtros
+$items_per_page = 10;
+$page = max(1, (int)($_GET['page_escorts'] ?? 1));
 $offset = ($page - 1) * $items_per_page;
-
-$search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
-$category = isset($_GET['category']) ? (int)$_GET['category'] : 0;
-$availability = isset($_GET['availability']) ? trim($_GET['availability']) : '';
-$language = isset($_GET['language']) ? trim($_GET['language']) : '';
-$rate_min = isset($_GET['rate_min']) ? (float)$_GET['rate_min'] : 0;
-$rate_max = isset($_GET['rate_max']) ? (float)$_GET['rate_max'] : 0;
-$physical_traits = isset($_GET['physical_traits']) ? trim($_GET['physical_traits']) : '';
-$order = in_array($_GET['order'] ?? '', ['views', 'name', 'distance']) ? $_GET['order'] : 'views';
-$age_min = isset($_GET['age_min']) ? (int)$_GET['age_min'] : 0;
-$views_min = isset($_GET['views_min']) ? (int)$_GET['views_min'] : 0;
-$lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 0;
-$lon = isset($_GET['lon']) ? (float)$_GET['lon'] : 0;
-$radius = isset($_GET['radius']) ? (float)$_GET['radius'] : 50;
-
+$filters = [
+    'type' => sanitize($_GET['filter_type'] ?? ''),
+    'online' => (int)($_GET['filter_online'] ?? -1),
+    'search' => sanitize($_GET['filter_search'] ?? ''),
+    'views_min' => (int)($_GET['filter_views_min'] ?? 0),
+    'tag' => sanitize($_GET['filter_tag'] ?? '')
+];
 $where = [];
 $params = [];
 $types = '';
-if (!empty($search)) {
-    $where[] = "(e.name LIKE ? OR e.description LIKE ? OR e.services LIKE ? OR e.tags LIKE ?)";
-    $params[] = '%' . $search . '%';
-    $params[] = '%' . $search . '%';
-    $params[] = '%' . $search . '%';
-    $params[] = '%' . $search . '%';
-    $types .= 'ssss';
+foreach ($filters as $key => $value) {
+    if ($key === 'online' && $value !== -1) {
+        $where[] = "e.is_online = ?"; // Corrigido de 'e.online' para 'e.is_online'
+        $params[] = $value;
+        $types .= 'i';
+    } elseif ($key === 'search' && $value) {
+        $where[] = "e.name LIKE ?";
+        $params[] = "%$value%";
+        $types .= 's';
+    } elseif ($value) {
+        $where[] = "e." . ($key === 'views_min' ? 'views' : $key) . " " . ($key === 'views_min' ? '>=' : '=') . " ?";
+        $params[] = $value;
+        $types .= $key === 'views_min' ? 'i' : 's';
+    }
 }
-if (!empty($keyword)) {
-    $where[] = "k.keyword = ?";
-    $params[] = $keyword;
-    $types .= 's';
-}
-if ($category > 0) {
-    $where[] = "ec.category_id = ?";
-    $params[] = $category;
-    $types .= 'i';
-}
-if (!empty($availability)) {
-    $where[] = "e.availability LIKE ?";
-    $params[] = '%' . $availability . '%';
-    $types .= 's';
-}
-if (!empty($language)) {
-    $where[] = "e.languages LIKE ?";
-    $params[] = '%' . $language . '%';
-    $types .= 's';
-}
-if ($rate_min > 0) {
-    $where[] = "CAST(REGEXP_REPLACE(e.rates, '[^0-9.]', '') AS DECIMAL) >= ?";
-    $params[] = $rate_min;
-    $types .= 'd';
-}
-if ($rate_max > 0) {
-    $where[] = "CAST(REGEXP_REPLACE(e.rates, '[^0-9.]', '') AS DECIMAL) <= ?";
-    $params[] = $rate_max;
-    $types .= 'd';
-}
-if (!empty($physical_traits)) {
-    $where[] = "e.physical_traits LIKE ?";
-    $params[] = '%' . $physical_traits . '%';
-    $types .= 's';
-}
-if ($age_min > 0) {
-    $where[] = "e.age >= ?";
-    $params[] = $age_min;
-    $types .= 'i';
-}
-if ($views_min > 0) {
-    $where[] = "e.views >= ?";
-    $params[] = $views_min;
-    $types .= 'i';
-}
-if ($lat && $lon && $radius) {
-    $where[] = "(6371 * acos(cos(radians(?)) * cos(radians(e.latitude)) * cos(radians(e.longitude) - radians(?)) + sin(radians(?)) * sin(radians(e.latitude)))) <= ?";
-    $params[] = $lat;
-    $params[] = $lon;
-    $params[] = $lat;
-    $params[] = $radius;
-    $types .= 'dddd';
-}
-$base_where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
+$where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
-$total_query = "SELECT COUNT(DISTINCT e.id) as total 
-                FROM escorts e 
-                LEFT JOIN escort_categories ec ON e.id = ec.escort_id 
-                LEFT JOIN keywords k ON e.id = k.escort_id 
-                $base_where_clause";
-$stmt_total = $conn->prepare($total_query);
-if ($types) {
-    $stmt_total->bind_param($types, ...$params);
-}
-$stmt_total->execute();
-$total_profiles = $stmt_total->get_result()->fetch_assoc()['total'];
-$total_pages = ceil($total_profiles / $items_per_page);
+// Total de escorts
+$stmt = $conn->prepare("SELECT COUNT(*) as total FROM escorts e $where_clause");
+if ($types) $stmt->bind_param($types, ...$params);
+$stmt->execute() or logError("Erro ao contar escorts: " . $conn->error);
+$total_escorts = $stmt->get_result()->fetch_assoc()['total'];
+$total_pages = ceil($total_escorts / $items_per_page);
 
+// Lista de escorts
+$stmt = $conn->prepare("SELECT e.id, e.name, e.type, e.is_online, e.views, e.latitude, e.longitude, u.username, 
+                              COUNT(f.id) as public_favorites 
+                       FROM escorts e 
+                       JOIN users u ON e.user_id = u.id 
+                       LEFT JOIN favorites f ON f.escort_id = e.id AND f.is_public = 1 
+                       $where_clause 
+                       GROUP BY e.id 
+                       ORDER BY e.views DESC 
+                       LIMIT ? OFFSET ?");
+if ($types) $stmt->bind_param($types . 'ii', ...array_merge($params, [$items_per_page, $offset]));
+else $stmt->bind_param('ii', $items_per_page, $offset);
+$stmt->execute() or logError("Erro ao buscar escorts: " . $conn->error);
+$escorts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Estatísticas com cache
+$cache_file = 'cache/stats_' . $_SESSION['user_id'] . '.json';
+$cache_time = 300; // 5 minutos
+if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_time) {
+    $stats = json_decode(file_get_contents($cache_file), true);
+} else {
+    $stmt = $conn->prepare("SELECT COUNT(CASE WHEN e.type = 'acompanhante' THEN 1 END) as acompanhantes,
+                                  COUNT(CASE WHEN e.type = 'criadora' THEN 1 END) as pornstars,
+                                  SUM(e.views) as total_views,
+                                  (SELECT COUNT(*) FROM favorites WHERE admin_id = ?) as favorites,
+                                  (SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND is_read = 0) as unread_messages,
+                                  (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules
+                           FROM escorts e");
+    $stmt->bind_param("ii", $_SESSION['user_id'], $_SESSION['user_id']);
+    $stmt->execute() or logError("Erro ao buscar estatísticas: " . $conn->error);
+    $stats = $stmt->get_result()->fetch_assoc();
+    file_put_contents($cache_file, json_encode($stats));
+}
+
+// Log de busca
+if ($filters['search']) {
+    $stmt = $conn->prepare("INSERT INTO search_log (admin_id, query) VALUES (?, ?)");
+    $stmt->bind_param("is", $_SESSION['user_id'], $filters['search']);
+    $stmt->execute() or logError("Erro ao logar busca: " . $conn->error);
+}
+
+// Categorias e moderação de fotos
 $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+$photos = $conn->query("SHOW TABLES LIKE 'photo_moderation'")->num_rows > 0
+    ? $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.status 
+                    FROM photos p JOIN escorts e ON p.escort_id = e.id 
+                    LEFT JOIN photo_moderation pm ON p.id = pm.photo_id 
+                    WHERE pm.status IS NULL OR pm.status = 'pending' 
+                    ORDER BY p.id DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC)
+    : [];
+
+if (isset($_POST['moderate_photos']) && $photos) {
+    if ($_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        logError("Token CSRF inválido na moderação de fotos.");
+        die("Erro: Token CSRF inválido.");
+    }
+    $photo_ids = $_POST['photo_ids'] ?? [];
+    $action = in_array($_POST['action'], ['approve', 'reject']) ? $_POST['action'] : 'pending';
+    if ($photo_ids) {
+        $stmt = $conn->prepare("INSERT INTO photo_moderation (photo_id, status) VALUES (?, ?) 
+                                ON DUPLICATE KEY UPDATE status = ?, moderated_at = NOW()");
+        foreach ($photo_ids as $photo_id) {
+            $stmt->bind_param("iss", $photo_id, $action, $action);
+            $stmt->execute() or logError("Erro ao moderar foto ID $photo_id: " . $conn->error);
+        }
+        $notification = json_encode(['type' => 'photo_moderation', 'message' => "Fotos moderadas: " . count($photo_ids) . " como '$action' por " . $_SESSION['username']]);
+        if (@file_get_contents("http://localhost:8080?msg=" . urlencode($notification)) === false) {
+            logError("Falha ao enviar notificação WebSocket: " . error_get_last()['message']);
+        }
+        if (file_exists($cache_file)) unlink($cache_file);
+        header("Location: admin.php#photo-moderation");
+        exit;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -109,368 +140,333 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eskort - Banco de Dados de Pornstars e Acompanhantes</title>
+    <title>Painel de Administração - Eskort</title>
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <style>
+        .loading { display: flex; align-items: center; justify-content: center; padding: 10px; background: #f9f9f9; border-radius: 6px; }
+        .spinner { width: 20px; height: 20px; border: 3px solid rgba(24,119,242,0.3); border-top-color: #1877F2; border-radius: 50%; animation: spin 1s infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
 </head>
 <body>
     <?php include 'header.php'; ?>
-
     <div class="container">
         <div class="main-content">
-            <div class="profiles-feed">
-                <div class="profiles-container">
-                    <div class="highlights-section">
-                        <h3>Destaques</h3>
-                        <div class="carousel">
-                            <button class="carousel-prev" onclick="carouselPrev()">◄</button>
-                            <div class="carousel-inner">
-                                <?php
-                                // Query ajustada para não usar is_public até que o banco seja atualizado
-                                $highlight_query = "SELECT e.id, e.name, e.profile_photo 
-                                                    FROM escorts e 
-                                                    JOIN favorites f ON e.id = f.escort_id 
-                                                    GROUP BY e.id 
-                                                    ORDER BY COUNT(f.id) DESC 
-                                                    LIMIT 3";
-                                $highlight_result = $conn->query($highlight_query);
-                                while ($highlight = $highlight_result->fetch_assoc()) {
-                                    $photo = $highlight['profile_photo'] ?: 'uploads/default.jpg';
-                                    $photo_webp = str_replace('.jpg', '.webp', $photo);
-                                    echo "<div class='carousel-item'>";
-                                    echo "<a href='public_profile.php?id=" . $highlight['id'] . "'>";
-                                    echo "<picture>";
-                                    echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
-                                    echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($highlight['name']) . "' class='lazy-load'>";
-                                    echo "</picture>";
-                                    echo "<p>" . htmlspecialchars($highlight['name']) . " (Favoritado)</p>";
-                                    echo "</a>";
-                                    echo "</div>";
-                                }
-                                ?>
-                            </div>
-                            <button class="carousel-next" onclick="carouselNext()">►</button>
-                        </div>
+            <h3>Bem-vindo, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h3>
+
+            <section class="dashboard-widgets">
+                <?php foreach (['acompanhantes' => 'Acompanhantes', 'pornstars' => 'Pornstars', 'total_views' => 'Visualizações', 'favorites' => 'Favoritos', 'pending_schedules' => 'Agendamentos'] as $key => $label): ?>
+                    <div class="widget" onclick="location.href='<?php echo $key === 'pending_schedules' ? 'schedule.php' : ($key === 'favorites' ? 'favorites.php' : '#escorts'); ?>';">
+                        <h4><?php echo $label; ?></h4>
+                        <p><?php echo $stats[$key]; ?></p>
+                        <canvas id="<?php echo $key; ?>-chart"></canvas>
                     </div>
-                    <h3>Resultados (<?php echo $total_profiles; ?> encontrados)</h3>
-                    <div class="feed-grid" id="profiles-grid">
-                        <?php
-                        $order_clause = $order === 'distance' && $lat && $lon 
-                            ? "ORDER BY (6371 * acos(cos(radians(?)) * cos(radians(e.latitude)) * cos(radians(e.longitude) - radians(?)) + sin(radians(?)) * sin(radians(e.latitude)))) ASC"
-                            : "ORDER BY e.$order DESC, e.id DESC";
-                        if ($order === 'distance' && $lat && $lon) {
-                            $params = array_merge([$lat, $lon, $lat], $params);
-                            $types = 'ddd' . $types;
-                        }
+                <?php endforeach; ?>
+            </section>
 
-                        $query = "SELECT e.id, e.name, e.profile_photo, e.description, e.type, e.is_online, e.views, e.tags, e.latitude, e.longitude, 
-                                         (SELECT GROUP_CONCAT(photo_path) FROM photos p WHERE p.escort_id = e.id LIMIT 2) as additional_photos,
-                                         (SELECT COUNT(*) FROM favorites f WHERE f.escort_id = e.id) as favorite_count 
-                                  FROM escorts e 
-                                  LEFT JOIN escort_categories ec ON e.id = ec.escort_id 
-                                  LEFT JOIN keywords k ON e.id = k.escort_id 
-                                  $base_where_clause 
-                                  GROUP BY e.id 
-                                  $order_clause 
-                                  LIMIT ? OFFSET ?";
-                        $stmt = $conn->prepare($query);
-                        if ($types) {
-                            $stmt->bind_param($types . 'ii', ...array_merge($params, [$items_per_page, $offset]));
-                        } else {
-                            $stmt->bind_param('ii', $items_per_page, $offset);
-                        }
-                        $stmt->execute();
-                        $result = $stmt->get_result();
-                        $tags_searched = !empty($search) ? array_map('trim', explode(',', strtolower($search))) : [];
-                        if ($result->num_rows > 0) {
-                            while ($row = $result->fetch_assoc()) {
-                                $photo = $row['profile_photo'] ?: 'uploads/default.jpg';
-                                $photo_webp = str_replace('.jpg', '.webp', $photo);
-                                $additional_photos = $row['additional_photos'] ? explode(',', $row['additional_photos']) : [];
-                                $distance = $lat && $lon ? round(6371 * acos(cos(deg2rad($lat)) * cos(deg2rad($row['latitude'])) * cos(deg2rad($row['longitude']) - deg2rad($lon)) + sin(deg2rad($lat)) * sin(deg2rad($row['latitude']))), 2) : null;
-                                echo "<div class='feed-card' data-id='{$row['id']}' onmouseover='showPreview(event, this, \"".htmlspecialchars($row['description'])."\", \"".htmlspecialchars($row['tags'])."\", \"$distance\")' onmouseout='hidePreview()'>";
-                                echo "<a href='public_profile.php?id=" . $row['id'] . "'>";
-                                echo "<div class='photo-container'>";
-                                echo "<picture>";
-                                echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
-                                echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($row['name']) . "' class='lazy-load'>";
-                                echo "</picture>";
-                                foreach ($additional_photos as $add_photo) {
-                                    $add_photo_webp = str_replace('.jpg', '.webp', $add_photo);
-                                    echo "<picture>";
-                                    echo "<source srcset='" . htmlspecialchars($add_photo_webp) . "' type='image/webp'>";
-                                    echo "<img data-src='" . htmlspecialchars($add_photo) . "' alt='Foto adicional' class='lazy-load small'>";
-                                    echo "</picture>";
-                                }
-                                echo "</div>";
-                                echo "<h4>" . htmlspecialchars($row['name']) . "</h4>";
-                                echo "</a>";
-                                echo "<p>" . ($row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $row['views'] . " views" . ($distance ? " • $distance km" : "") . ($row['favorite_count'] > 0 ? " • {$row['favorite_count']} favoritos" : "") . "</p>";
-                                echo "<span class='online-status " . ($row['is_online'] ? 'online' : 'offline') . "'>" . ($row['is_online'] ? 'Online' : 'Offline') . "</span>";
-                                echo "</div>";
-
-                                if (!empty($tags_searched) && !empty($row['tags'])) {
-                                    $profile_tags = array_map('trim', explode(',', strtolower($row['tags'])));
-                                    $similarity = count(array_intersect($tags_searched, $profile_tags));
-                                    if ($similarity > 0) {
-                                        $similar[$row['id']] = $similarity;
-                                    }
-                                }
-                            }
-                        } else {
-                            echo "<p>Nenhum perfil encontrado.</p>";
-                        }
-
-                        if (!empty($similar)) {
-                            arsort($similar);
-                            echo "<div class='similar-profiles'><h3>Perfis Similares</h3><div class='feed-grid'>";
-                            $similar_ids = array_keys(array_slice($similar, 0, 3, true));
-                            $similar_query = "SELECT e.id, e.name, e.profile_photo, e.type, e.is_online, e.views 
-                                              FROM escorts e 
-                                              WHERE e.id IN (" . implode(',', $similar_ids) . ") 
-                                              ORDER BY FIELD(e.id, " . implode(',', $similar_ids) . ")";
-                            $similar_result = $conn->query($similar_query);
-                            while ($similar_row = $similar_result->fetch_assoc()) {
-                                $photo = $similar_row['profile_photo'] ?: 'uploads/default.jpg';
-                                $photo_webp = str_replace('.jpg', '.webp', $photo);
-                                echo "<div class='feed-card' data-id='{$similar_row['id']}'>";
-                                echo "<a href='public_profile.php?id=" . $similar_row['id'] . "'>";
-                                echo "<div class='photo-container'>";
-                                echo "<picture>";
-                                echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
-                                echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($similar_row['name']) . "' class='lazy-load'>";
-                                echo "</picture>";
-                                echo "</div>";
-                                echo "<h4>" . htmlspecialchars($similar_row['name']) . "</h4>";
-                                echo "</a>";
-                                echo "<p>" . ($similar_row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $similar_row['views'] . " views</p>";
-                                echo "<span class='online-status " . ($similar_row['is_online'] ? 'online' : 'offline') . "'>" . ($similar_row['is_online'] ? 'Online' : 'Offline') . "</span>";
-                                echo "</div>";
-                            }
-                            echo "</div></div>";
-                        }
-                        ?>
-                    </div>
-                    <div id="loading">Carregando mais...</div>
+            <section id="escorts">
+                <h2>Gerenciar Perfis</h2>
+                <div class="action-bar">
+                    <form class="export-form" action="export_escorts.php" method="POST">
+                        <?php $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); ?>
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                        <label><input type="checkbox" name="fields[]" value="name" checked> Nome</label>
+                        <label><input type="checkbox" name="fields[]" value="type"> Tipo</label>
+                        <label><input type="checkbox" name="fields[]" value="views"> Views</label>
+                        <button type="submit" class="btn">Exportar CSV</button>
+                    </form>
+                    <form class="export-form" action="export_pdf.php" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                        <select name="export_category">
+                            <option value="0">Todas</option>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?php echo $cat['id']; ?>" <?php echo $export_category == $cat['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($cat['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="btn">Exportar PDF</button>
+                    </form>
+                    <input type="file" id="import-csv" accept=".csv" onchange="importCSV(this)">
+                    <a href="edit_escort.php" class="btn">Adicionar Perfil</a>
                 </div>
-            </div>
+                <div id="import-result"></div>
+                <form class="filter-form" method="GET">
+                    <input type="text" name="filter_search" value="<?php echo htmlspecialchars($filters['search']); ?>" placeholder="Buscar por nome">
+                    <select name="filter_type">
+                        <option value="">Todos</option>
+                        <option value="acompanhante" <?php echo $filters['type'] === 'acompanhante' ? 'selected' : ''; ?>>Acompanhante</option>
+                        <option value="criadora" <?php echo $filters['type'] === 'criadora' ? 'selected' : ''; ?>>Pornstar</option>
+                    </select>
+                    <select name="filter_online">
+                        <option value="-1">Todos</option>
+                        <option value="1" <?php echo $filters['online'] === 1 ? 'selected' : ''; ?>>Online</option>
+                        <option value="0" <?php echo $filters['online'] === 0 ? 'selected' : ''; ?>>Offline</option>
+                    </select>
+                    <input type="number" name="filter_views_min" value="<?php echo $filters['views_min']; ?>" placeholder="Views mín">
+                    <input type="text" name="filter_tag" value="<?php echo htmlspecialchars($filters['tag']); ?>" placeholder="Tag">
+                    <button type="submit" class="btn">Filtrar</button>
+                    <button type="button" class="btn" onclick="resetFilters()">Limpar</button>
+                </form>
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">ID</th>
+                            <th onclick="sortTable(1)">Nome</th>
+                            <th onclick="sortTable(2)">Tipo</th>
+                            <th onclick="sortTable(3)">Online</th>
+                            <th onclick="sortTable(4)">Views</th>
+                            <th onclick="sortTable(5)">Lat/Long</th>
+                            <th onclick="sortTable(6)">Usuário</th>
+                            <th onclick="sortTable(7)">Favoritos</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="escorts-tbody">
+                        <?php foreach ($escorts as $e): ?>
+                            <tr>
+                                <td><?php echo $e['id']; ?></td>
+                                <td><?php echo htmlspecialchars($e['name']); ?></td>
+                                <td><?php echo $e['type']; ?></td>
+                                <td><?php echo $e['is_online'] ? 'Sim' : 'Não'; ?></td>
+                                <td><?php echo $e['views']; ?></td>
+                                <td><?php echo $e['latitude'] . ', ' . $e['longitude']; ?></td>
+                                <td><?php echo htmlspecialchars($e['username']); ?></td>
+                                <td><?php echo $e['public_favorites']; ?></td>
+                                <td>
+                                    <a href="edit_escort.php?id=<?php echo $e['id']; ?>" class="btn">Editar</a>
+                                    <button onclick="toggleAction('favorite', <?php echo $e['id']; ?>, this)" class="btn">Favoritar<span id="favorite-feedback-<?php echo $e['id']; ?>"></span></button>
+                                    <button onclick="toggleAction('highlight', <?php echo $e['id']; ?>, this)" class="btn">Destacar<span id="highlight-feedback-<?php echo $e['id']; ?>"></span></button>
+                                    <button onclick="showDeletePopup(<?php echo $e['id']; ?>)" class="btn">Excluir</button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                        <a href="?page_escorts=<?php echo $i; ?>&<?php echo http_build_query($filters); ?>" class="<?php echo $i === $page ? 'active' : ''; ?>"><?php echo $i; ?></a>
+                    <?php endfor; ?>
+                </div>
+            </section>
+
+            <section id="photo-moderation">
+                <h2>Moderação de Fotos</h2>
+                <?php if ($photos): ?>
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
+                                    <th>ID</th>
+                                    <th>Foto</th>
+                                    <th>Perfil</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($photos as $p): ?>
+                                    <tr>
+                                        <td><input type="checkbox" name="photo_ids[]" value="<?php echo $p['id']; ?>"></td>
+                                        <td><?php echo $p['id']; ?></td>
+                                        <td><img src="<?php echo htmlspecialchars($p['photo_path']); ?>" alt="Foto" style="max-width: 100px;"></td>
+                                        <td><?php echo htmlspecialchars($p['escort_name']); ?></td>
+                                        <td><?php echo $p['status'] ?? 'Pendente'; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <select name="action">
+                            <option value="approve">Aprovar</option>
+                            <option value="reject">Rejeitar</option>
+                        </select>
+                        <button type="submit" name="moderate_photos" class="btn">Aplicar</button>
+                    </form>
+                <?php else: ?>
+                    <p><?php echo $photo_moderation_exists ? 'Nenhuma foto pendente.' : 'Tabela photo_moderation não existe.'; ?></p>
+                <?php endif; ?>
+            </section>
         </div>
     </div>
 
-    <div id="profile-preview" class="profile-preview"></div>
-    <div id="notification" style="display: none;"></div>
-
-    <button class="back-to-top" onclick="scrollToTop()">↑</button>
+    <div id="delete-popup" class="confirm-popup">
+        <div class="confirm-content">
+            <h3>Confirmar Exclusão</h3>
+            <p>Tem certeza que deseja excluir este perfil?</p>
+            <div class="confirm-buttons">
+                <button id="delete-yes" class="btn">Sim</button>
+                <button id="delete-cancel" class="btn" onclick="closeDeletePopup()">Não</button>
+            </div>
+            <p id="delete-feedback" style="display: none;"></p>
+        </div>
+    </div>
 
     <script>
-        let page = <?php echo $page; ?>;
-        let loading = false;
-        let totalPages = <?php echo $total_pages; ?>;
-        let lat = <?php echo $lat; ?>;
-        let lon = <?php echo $lon; ?>;
-        const ws = new WebSocket('ws://localhost:8080');
+        let sortDir = {}, isDeleting = false, page = <?php echo $page; ?>, itemsPerPage = <?php echo $items_per_page; ?>;
+        const socket = new WebSocket('ws://localhost:8080');
+        socket.onopen = () => console.log('WebSocket OK');
+        socket.onmessage = e => Toastify({ text: JSON.parse(e.data).message, duration: 3000, style: { background: '#28A745' } }).showToast();
 
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            if (data.type === 'new_profile') {
-                const notification = document.getElementById('notification');
-                notification.textContent = 'Novo perfil adicionado: ' + data.name;
-                notification.style.display = 'block';
-                setTimeout(() => notification.style.display = 'none', 3000);
-            }
-        };
+        function showDeletePopup(id) {
+            if (isDeleting) return;
+            const popup = document.getElementById('delete-popup'), yes = document.getElementById('delete-yes'), 
+                  cancel = document.getElementById('delete-cancel'), feedback = document.getElementById('delete-feedback');
+            popup.classList.add('active');
+            yes.disabled = cancel.disabled = false;
+            feedback.style.display = 'none';
 
-        function filterProfiles() {
-            const search = document.getElementById('search-input').value;
-            const keyword = document.getElementById('keyword-input').value;
-            const category = document.getElementById('category-filter').value;
-            const availability = document.getElementById('availability-filter').value;
-            const language = document.getElementById('language-filter').value;
-            const rateMin = document.getElementById('rate-min-filter').value;
-            const rateMax = document.getElementById('rate-max-filter').value;
-            const physicalTraits = document.getElementById('physical-traits-filter').value;
-            const order = document.getElementById('order-filter').value;
-            const ageMin = document.getElementById('age-min-filter').value;
-            const viewsMin = document.getElementById('views-min-filter').value;
-            const radius = document.getElementById('radius-filter').value;
-            window.location.href = `?search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&rate_min=${rateMin}&rate_max=${rateMax}&physical_traits=${encodeURIComponent(physicalTraits)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
-        }
-
-        function suggest(query, type) {
-            if (query.length < 2) {
-                document.getElementById(type + '-suggestions').style.display = 'none';
-                return;
-            }
-            fetch(`suggest.php?q=${encodeURIComponent(query)}&type=${type}`)
-                .then(response => response.json())
-                .then(data => {
-                    const suggestions = document.getElementById(type + '-suggestions');
-                    suggestions.innerHTML = '';
-                    data.forEach(item => {
-                        const div = document.createElement('div');
-                        div.textContent = item;
-                        div.onclick = () => {
-                            document.getElementById(type + '-input').value = item;
-                            suggestions.style.display = 'none';
-                            filterProfiles();
-                        };
-                        suggestions.appendChild(div);
-                    });
-                    suggestions.style.display = data.length ? 'block' : 'none';
-                });
-        }
-
-        function loadMore() {
-            if (loading || page >= totalPages) return;
-            loading = true;
-            document.getElementById('loading').style.display = 'block';
-
-            const search = document.getElementById('search-input').value;
-            const keyword = document.getElementById('keyword-input').value;
-            const category = document.getElementById('category-filter').value;
-            const availability = document.getElementById('availability-filter').value;
-            const language = document.getElementById('language-filter').value;
-            const rateMin = document.getElementById('rate-min-filter').value;
-            const rateMax = document.getElementById('rate-max-filter').value;
-            const physicalTraits = document.getElementById('physical-traits-filter').value;
-            const order = document.getElementById('order-filter').value;
-            const ageMin = document.getElementById('age-min-filter').value;
-            const viewsMin = document.getElementById('views-min-filter').value;
-            const radius = document.getElementById('radius-filter').value;
-            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&rate_min=${rateMin}&rate_max=${rateMax}&physical_traits=${encodeURIComponent(physicalTraits)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
-
-            const cached = localStorage.getItem(url);
-            if (cached) {
-                appendProfiles(JSON.parse(cached));
-                page++;
-                loading = false;
-                document.getElementById('loading').style.display = 'none';
-                return;
-            }
-
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    appendProfiles(data);
-                    localStorage.setItem(url, JSON.stringify(data));
-                    page++;
-                    loading = false;
-                    document.getElementById('loading').style.display = 'none';
-                });
-        }
-
-        function appendProfiles(profiles) {
-            const grid = document.getElementById('profiles-grid');
-            profiles.forEach(profile => {
-                const card = document.createElement('div');
-                card.className = 'feed-card';
-                card.dataset.id = profile.id;
-                card.onmouseover = () => showPreview(event, card, profile.description, profile.tags, profile.distance);
-                card.onmouseout = hidePreview;
-                const photo = profile.profile_photo || 'uploads/default.jpg';
-                const photoWebp = photo.replace('.jpg', '.webp');
-                const additionalPhotos = profile.additional_photos ? profile.additional_photos.split(',') : [];
-                card.innerHTML = `
-                    <a href="public_profile.php?id=${profile.id}">
-                        <div class="photo-container">
-                            <picture>
-                                <source srcset="${photoWebp}" type="image/webp">
-                                <img data-src="${photo}" alt="${profile.name}" class="lazy-load">
-                            </picture>
-                            ${additionalPhotos.map(photo => `
-                                <picture>
-                                    <source srcset="${photo.replace('.jpg', '.webp')}" type="image/webp">
-                                    <img data-src="${photo}" alt="Foto adicional" class="lazy-load small">
-                                </picture>
-                            `).join('')}
-                        </div>
-                        <h4>${profile.name}</h4>
-                    </a>
-                    <p>${profile.type === 'acompanhante' ? 'Acompanhante' : 'Pornstar'} • ${profile.views} views${profile.distance ? ' • ' + profile.distance + ' km' : ''}${profile.favorite_count > 0 ? ' • ' + profile.favorite_count + ' favoritos' : ''}</p>
-                    <span class="online-status ${profile.is_online ? 'online' : 'offline'}">${profile.is_online ? 'Online' : 'Offline'}</span>
-                `;
-                grid.appendChild(card);
-            });
-            lazyLoadImages();
-        }
-
-        function showPreview(event, card, description, tags, distance) {
-            const preview = document.getElementById('profile-preview');
-            const rect = card.getBoundingClientRect();
-            preview.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
-            preview.style.top = `${rect.top + window.scrollY - 10}px`;
-            preview.innerHTML = `
-                <div class="preview-content">
-                    <h4>${card.querySelector('h4').textContent}</h4>
-                    <p>${description || 'Sem descrição'}</p>
-                    <p><strong>Tags:</strong> ${tags || 'Sem tags'}</p>
-                    ${distance ? '<p><strong>Distância:</strong> ' + distance + ' km</p>' : ''}
-                </div>
-            `;
-            preview.style.display = 'block';
-        }
-
-        function hidePreview() {
-            document.getElementById('profile-preview').style.display = 'none';
-        }
-
-        function lazyLoadImages() {
-            const images = document.querySelectorAll('.lazy-load');
-            const observer = new IntersectionObserver(entries => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        img.src = img.dataset.src;
-                        img.classList.remove('lazy-load');
-                        observer.unobserve(img);
+            yes.onclick = () => {
+                if (isDeleting) return;
+                isDeleting = true;
+                yes.disabled = cancel.disabled = true;
+                feedback.style.display = 'block';
+                fetch('delete_escort.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `id=${id}&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`
+                })
+                .then(r => r.json())
+                .then(d => {
+                    feedback.textContent = d.status === 'success' ? 'Excluído!' : 'Erro: ' + d.message;
+                    feedback.style.color = d.status === 'success' ? '#28A745' : '#DC3545';
+                    Toastify({ text: d.status === 'success' ? 'Excluído!' : 'Erro: ' + d.message, duration: 3000, style: { background: d.status === 'success' ? '#28A745' : '#DC3545' } }).showToast();
+                    if (d.status === 'success') {
+                        socket.send(JSON.stringify({ type: 'delete', message: `Perfil ID ${id} excluído por <?php echo $_SESSION['username']; ?>` }));
+                        setTimeout(() => { closeDeletePopup(); location.reload(); }, 1000);
+                    } else {
+                        yes.disabled = cancel.disabled = false;
+                        isDeleting = false;
                     }
                 });
-            }, { rootMargin: '0px 0px 100px 0px' });
-            images.forEach(img => observer.observe(img));
+            };
         }
 
-        function scrollToTop() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        function closeDeletePopup() {
+            if (isDeleting) return;
+            document.getElementById('delete-popup').classList.remove('active');
         }
 
-        function getUserLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(position => {
-                    lat = position.coords.latitude;
-                    lon = position.coords.longitude;
-                    document.getElementById('order-filter').value = 'distance';
-                    filterProfiles();
-                }, () => alert('Não foi possível obter sua localização.'));
-            } else {
-                alert('Geolocalização não suportada pelo navegador.');
-            }
+        function toggleAction(action, id, btn) {
+            const feedback = document.getElementById(`${action}-feedback-${id}`);
+            feedback.textContent = '⌛';
+            fetch(`toggle_${action}.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `escort_id=${id}&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`
+            })
+            .then(r => r.json())
+            .then(d => {
+                feedback.textContent = d.status === 'success' ? '✓' : '✗';
+                feedback.style.color = d.status === 'success' ? '#28A745' : '#DC3545';
+                Toastify({ text: d.message, duration: 3000, style: { background: d.status === 'success' ? '#28A745' : '#DC3545' } }).showToast();
+                if (d.status === 'success') {
+                    socket.send(JSON.stringify({ type: action, message: `${d.message} para ID ${id} por <?php echo $_SESSION['username']; ?>` }));
+                    setTimeout(() => location.reload(), 1000);
+                }
+            });
         }
 
-        function carouselPrev() {
-            const items = document.querySelectorAll('.carousel-item');
-            let current = Array.from(items).findIndex(item => item.classList.contains('active'));
-            items[current].classList.remove('active');
-            current = (current - 1 + items.length) % items.length;
-            items[current].classList.add('active');
+        function toggleSelectAll() {
+            document.querySelectorAll('input[name="photo_ids[]"]').forEach(cb => cb.checked = document.getElementById('select-all').checked);
         }
 
-        function carouselNext() {
-            const items = document.querySelectorAll('.carousel-item');
-            let current = Array.from(items).findIndex(item => item.classList.contains('active'));
-            items[current].classList.remove('active');
-            current = (current + 1) % items.length;
-            items[current].classList.add('active');
+        function sortTable(col) {
+            const tbody = document.getElementById('escorts-tbody'), rows = Array.from(tbody.querySelectorAll('tr')), 
+                  th = document.querySelectorAll('.admin-table th')[col];
+            sortDir[col] = sortDir[col] === 'asc' ? 'desc' : 'asc';
+            rows.sort((a, b) => {
+                const aVal = a.cells[col].textContent.trim(), bVal = b.cells[col].textContent.trim();
+                return sortDir[col] === 'asc' ? aVal.localeCompare(bVal, undefined, { numeric: true }) : bVal.localeCompare(aVal, undefined, { numeric: true });
+            });
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+            document.querySelectorAll('.admin-table th').forEach(th => th.setAttribute('aria-sort', 'none'));
+            th.setAttribute('aria-sort', sortDir[col]);
+        }
+
+        function importCSV(input) {
+            if (!input.files[0]) return;
+            const formData = new FormData();
+            formData.append('csv_file', input.files[0]);
+            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+            const result = document.getElementById('import-result');
+            result.style.display = 'block';
+            result.className = 'loading';
+            result.innerHTML = '<div class="spinner"></div> Importando...';
+            fetch('import_escorts.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(d => {
+                    result.className = d.status === 'success' ? 'success' : 'error';
+                    result.textContent = d.status === 'success' ? `Concluído! ${d.inserted} inseridos, ${d.updated} atualizados.` : `Erro: ${d.message}`;
+                    Toastify({ text: d.status === 'success' ? "Concluído!" : "Erro: " + d.message, duration: 3000, style: { background: d.status === 'success' ? '#28A745' : '#DC3545' } }).showToast();
+                    if (d.status === 'success') {
+                        socket.send(JSON.stringify({ type: 'import', message: `Importação: ${d.inserted} inseridos, ${d.updated} atualizados por <?php echo $_SESSION['username']; ?>` }));
+                        setTimeout(() => location.reload(), 2000);
+                    }
+                });
+        }
+
+        function loadMoreEscorts() {
+            page++;
+            const url = `load_escorts.php?page=${page}&items_per_page=${itemsPerPage}&<?php echo http_build_query($filters); ?>&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`;
+            fetch(url)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'success') {
+                        const tbody = document.getElementById('escorts-tbody');
+                        d.escorts.forEach(e => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${e.id}</td>
+                                <td>${e.name}</td>
+                                <td>${e.type}</td>
+                                <td>${e.is_online ? 'Sim' : 'Não'}</td>
+                                <td>${e.views}</td>
+                                <td>${e.latitude}, ${e.longitude}</td>
+                                <td>${e.username}</td>
+                                <td>${e.public_favorites}</td>
+                                <td>
+                                    <a href="edit_escort.php?id=${e.id}" class="btn">Editar</a>
+                                    <button onclick="toggleAction('favorite', ${e.id}, this)" class="btn">Favoritar<span id="favorite-feedback-${e.id}"></span></button>
+                                    <button onclick="toggleAction('highlight', ${e.id}, this)" class="btn">Destacar<span id="highlight-feedback-${e.id}"></span></button>
+                                    <button onclick="showDeletePopup(${e.id})" class="btn">Excluir</button>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                        if (d.escorts.length < itemsPerPage) document.getElementById('load-more-btn')?.remove();
+                    } else {
+                        Toastify({ text: "Erro ao carregar: " + d.message, duration: 3000, style: { background: "#DC3545" } }).showToast();
+                    }
+                });
+        }
+
+        function resetFilters() {
+            document.querySelector('.filter-form').reset();
+            window.location.href = 'admin.php?page_escorts=<?php echo $page; ?>';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const backToTop = document.querySelector('.back-to-top');
-            window.addEventListener('scroll', () => {
-                backToTop.style.display = window.scrollY > 300 ? 'block' : 'none';
-                if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 200) {
-                    loadMore();
-                }
+            ['acompanhantes', 'pornstars', 'total_views', 'favorites', 'pending_schedules'].forEach(key => {
+                new Chart(document.getElementById(`${key}-chart`), {
+                    type: 'doughnut',
+                    data: { labels: [key.replace('_', ' ').toUpperCase()], datasets: [{ data: [<?php echo json_encode($stats); ?>[key]], backgroundColor: ['#1877F2'] }] },
+                    options: { plugins: { legend: { display: false } }, cutout: '70%' }
+                });
             });
-            lazyLoadImages();
-            document.querySelector('.carousel-item').classList.add('active');
+
+            const observer = new IntersectionObserver(entries => {
+                if (entries[0].isIntersecting) loadMoreEscorts();
+            }, { rootMargin: '100px' });
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.id = 'load-more-btn';
+            loadMoreBtn.className = 'btn';
+            loadMoreBtn.textContent = 'Carregar Mais';
+            loadMoreBtn.onclick = loadMoreEscorts;
+            document.querySelector('#escorts').appendChild(loadMoreBtn);
+            observer.observe(loadMoreBtn);
         });
     </script>
 </body>

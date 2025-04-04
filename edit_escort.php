@@ -39,13 +39,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'video_thumbnail' => $escort ? $escort['video_thumbnail'] : ''
     ];
 
-    // Validações básicas
     if (empty($data['name'])) $error = "Nome é obrigatório.";
     elseif ($data['age'] < 18) $error = "Idade mínima é 18 anos.";
     elseif ($data['phone'] && !preg_match('/^\+?\d{10,15}$/', $data['phone'])) $error = "Telefone inválido (ex.: +5511998765432).";
     elseif ($data['height'] < 0 || $data['weight'] < 0) $error = "Altura e peso não podem ser negativos.";
     else {
-        // Upload de foto de perfil
         if (!empty($_FILES['profile_photo']['name'])) {
             $photo_name = time() . '_' . basename($_FILES['profile_photo']['name']);
             $photo_file = $target_dir . $photo_name;
@@ -62,7 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Upload de vídeo
         if (!$error && !empty($_FILES['video']['name'])) {
             $video_name = time() . '_' . basename($_FILES['video']['name']);
             $video_file = $target_dir . $video_name;
@@ -97,13 +94,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $data['type'], $data['is_online'], $data['physical_traits'], $data['phone'], $data['height'], $data['weight'], $data['languages'], 
                 $data['views'], $data['latitude'], $data['longitude'], $data['tags'], $data['profile_photo'], $data['video_url'], $data['video_thumbnail'], 
                 $id > 0 ? $id : null);
-            $action = $id > 0 ? 'update' : 'create';
+            $action = $id > 0 ? 'UPDATE' : 'INSERT';
 
             if ($stmt->execute()) {
                 $escort_id = $id > 0 ? $id : $stmt->insert_id;
-                $stmt = $conn->prepare("INSERT INTO edit_log (admin_id, escort_id, action) VALUES (?, ?, ?)");
-                $stmt->bind_param("iis", $_SESSION['user_id'], $escort_id, $action);
-                $stmt->execute() or logError("Erro ao logar edição: " . $conn->error);
+                $details = json_encode(['name' => $data['name'], 'type' => $data['type']]);
+                logDBAction($action, 'escorts', $escort_id, $details);
 
                 $to = $escort ? $escort['email'] : $conn->query("SELECT email FROM users WHERE id = {$data['user_id']}")->fetch_assoc()['email'];
                 $subject = $id > 0 ? "Perfil Atualizado - Eskort" : "Novo Perfil Criado - Eskort";

@@ -5,7 +5,7 @@
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
-define('DB_NAME', 'eskort'); // Ajustado de 'eskort_db' para 'eskort'
+define('DB_NAME', 'eskort');
 
 // Conexão ao banco de dados
 function getDBConnection() {
@@ -39,6 +39,17 @@ function logError($message, $file = 'eskort_errors.log') {
     $timestamp = date('Y-m-d H:i:s');
     $entry = "[$timestamp] " . $message . " | IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A') . " | User: " . ($_SESSION['username'] ?? 'N/A') . "\n";
     file_put_contents($log_file, $entry, FILE_APPEND | LOCK_EX);
+}
+
+// Função de log de registros do banco
+function logDBAction($action, $table_name, $record_id = null, $details = null) {
+    $conn = getDBConnection();
+    $user_id = $_SESSION['user_id'] ?? null;
+    $stmt = $conn->prepare("INSERT INTO db_log (action, table_name, record_id, user_id, details) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssis", $action, $table_name, $record_id, $user_id, $details);
+    $stmt->execute() or logError("Erro ao registrar ação no db_log: " . $conn->error);
+    $stmt->close();
+    $conn->close();
 }
 
 // Configuração de erros do PHP

@@ -11,7 +11,7 @@ $conn = getDBConnection();
 
 // Verifica integridade do banco
 function checkDB($conn) {
-    $tables = ['escorts', 'users', 'favorites', 'messages', 'schedules', 'photos', 'photo_moderation', 'search_log', 'categories'];
+    $tables = ['escorts', 'users', 'favorites', 'messages', 'schedules', 'photos', 'photo_moderation', 'search_log', 'categories', 'db_log'];
     foreach ($tables as $table) {
         if ($conn->query("SHOW TABLES LIKE '$table'")->num_rows == 0) {
             logError("Tabela '$table' não existe no banco de dados.");
@@ -76,7 +76,7 @@ $escorts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // Estatísticas com cache
 $cache_file = 'cache/stats_' . $_SESSION['user_id'] . '.json';
-$cache_time = 300; // 5 minutos
+$cache_time = 300;
 if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_time) {
     $stats = json_decode(file_get_contents($cache_file), true);
 } else {
@@ -123,12 +123,12 @@ if (isset($_POST['moderate_photos']) && $photos) {
         foreach ($photo_ids as $photo_id) {
             $stmt->bind_param("iss", $photo_id, $action, $action);
             $stmt->execute() or logError("Erro ao moderar foto ID $photo_id: " . $conn->error);
+            logDBAction("UPDATE", "photo_moderation", $photo_id, "Status alterado para '$action'");
         }
         $notification = json_encode(['type' => 'photo_moderation', 'message' => "Fotos moderadas: " . count($photo_ids) . " como '$action' por " . $_SESSION['username']]);
         if (@file_get_contents("http://localhost:8080?msg=" . urlencode($notification)) === false) {
             logError("Falha ao enviar notificação WebSocket: " . error_get_last()['message']);
         }
-        // Invalida o cache após moderação
         if (file_exists($cache_file)) unlink($cache_file);
         header("Location: admin.php#photo-moderation");
         exit;

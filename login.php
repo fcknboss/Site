@@ -1,14 +1,14 @@
 <?php
 session_start();
-require_once 'config.php'; // Garantir que config.php seja incluído
+require_once 'config.php'; // Inclui config.php com logDBAction()
 
 // Conexão com o banco
-$conn = getDBConnection(); // Inicializa a conexão e seleciona o banco eskort
+$conn = getDBConnection();
 
 // Verifica se o formulário foi enviado
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
-    $password = $_POST['password']; // Senha não precisa de sanitização aqui, será verificada com password_verify
+    $password = $_POST['password'];
 
     // Prepara a consulta para buscar o usuário
     $stmt = $conn->prepare("SELECT id, username, password, role FROM users WHERE username = ?");
@@ -28,9 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
 
-        // Registra o login bem-sucedido no log do banco
-        $details = json_encode(['username' => $username, 'role' => $user['role']]);
-        logDBAction("LOGIN_SUCCESS", "users", $user['id'], $details);
+        // Registra o login bem-sucedido no db_log
+        logDBAction("LOGIN", "users", $user['id'], "Login bem-sucedido");
 
         // Redireciona com base no papel do usuário
         if ($user['role'] === 'admin') {
@@ -40,10 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     } else {
-        // Registra tentativa de login falhada
-        $details = json_encode(['username' => $username, 'ip' => $_SERVER['REMOTE_ADDR']]);
-        logDBAction("LOGIN_FAIL", "users", null, $details);
         $error = "Usuário ou senha inválidos.";
+        // Registra tentativa de login falha no db_log
+        logDBAction("LOGIN_ATTEMPT", "users", null, "Tentativa de login falha para username: '$username'");
     }
 }
 ?>

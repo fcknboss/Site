@@ -114,3 +114,18 @@
 [2025-04-04 05:49:32] Erro PHP [8192]: htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated em C:\xampp\htdocs\eskort\Site\index.php:190 | IP: ::1 | User: admin
 [2025-04-04 05:49:32] Erro PHP [8192]: htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated em C:\xampp\htdocs\eskort\Site\index.php:190 | IP: ::1 | User: admin
 [2025-04-04 05:49:32] Erro PHP [8192]: htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated em C:\xampp\htdocs\eskort\Site\index.php:190 | IP: ::1 | User: admin
+[2025-04-04 05:54:09] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\index.php:56 | IP: ::1 | User: admin
+[2025-04-04 05:54:14] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\index.php:56 | IP: ::1 | User: admin
+[2025-04-04 05:54:17] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:01:04] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:04:45] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\index.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:04:47] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:04:56] Exceção: mysqli_stmt::bind_param(): Argument #23 cannot be passed by reference em C:\xampp\htdocs\eskort\Site\edit_escort.php:99 | IP: ::1 | User: admin
+[2025-04-04 06:05:51] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:05:54] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:08:48] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:11:25] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:11:56] Erro PHP [8192]: Constant FILTER_SANITIZE_STRING is deprecated em C:\xampp\htdocs\eskort\Site\login.php:10 | IP: ::1 | User: admin
+[2025-04-04 06:11:56] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin
+[2025-04-04 06:12:00] Erro PHP [8192]: Constant FILTER_SANITIZE_STRING is deprecated em C:\xampp\htdocs\eskort\Site\login.php:10 | IP: ::1 | User: admin
+[2025-04-04 06:12:00] Exceção: Unknown column 'e.online' in 'where clause' em C:\xampp\htdocs\eskort\Site\admin.php:56 | IP: ::1 | User: admin

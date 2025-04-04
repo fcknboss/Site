@@ -2,31 +2,24 @@
 require_once 'session.php';
 require_once 'config.php';
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    echo json_encode(['status' => 'error', 'message' => 'Acesso negado']);
-    exit;
-}
-
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-    echo json_encode(['status' => 'error', 'message' => 'Token CSRF inválido']);
-    exit;
-}
-
-$escort_id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-if ($escort_id <= 0) {
-    echo json_encode(['status' => 'error', 'message' => 'ID inválido']);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['id']) || !isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    echo json_encode(['status' => 'error', 'message' => 'Requisição inválida']);
     exit;
 }
 
 $conn = getDBConnection();
+$id = (int)$_POST['id'];
 $stmt = $conn->prepare("DELETE FROM escorts WHERE id = ?");
-$stmt->bind_param("i", $escort_id);
+$stmt->bind_param("i", $id);
 
-if ($stmt->execute() && $stmt->affected_rows > 0) {
+if ($stmt->execute()) {
+    logDBAction("DELETE", "escorts", $id, "Perfil excluído");
     echo json_encode(['status' => 'success', 'message' => 'Perfil excluído com sucesso']);
 } else {
+    logError("Erro ao excluir perfil ID $id: " . $conn->error);
     echo json_encode(['status' => 'error', 'message' => 'Erro ao excluir perfil']);
 }
+
 $stmt->close();
 $conn->close();
 ?>
