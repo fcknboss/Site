@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once 'config.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
@@ -70,9 +72,9 @@ $offset_escorts = ($page_escorts - 1) * $items_per_page;
 $filter_type = isset($_GET['filter_type']) ? trim($_GET['filter_type']) : '';
 $filter_online = isset($_GET['filter_online']) ? (int)$_GET['filter_online'] : -1;
 $filter_search = isset($_GET['filter_search']) ? trim($_GET['filter_search']) : '';
-$filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min']) : 0;
+$filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min'] : 0;
 $filter_tag = isset($_GET['filter_tag']) ? trim($_GET['filter_tag']) : '';
-$export_category = isset($_POST['export_category']) ? (int)$_POST['export_category']) : 0;
+$export_category = isset($_POST['export_category']) ? (int)$_POST['export_category'] : 0;
 
 $where = [];
 $params = [];
