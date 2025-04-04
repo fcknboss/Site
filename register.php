@@ -1,23 +1,34 @@
 <?php
-include 'config.php';
+session_start();
+require_once 'config.php';
+
+$conn = getDBConnection();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'];
-    $email = $_POST['email'];
+    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
+    $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    $role = 'client'; // Padrão para novos usuários
+    $role = filter_input(INPUT_POST, 'role', FILTER_SANITIZE_STRING) ?: 'client';
 
+    // Verifica se o username ou email já existe
     $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
     $stmt->bind_param("ss", $username, $email);
     $stmt->execute();
-    if ($stmt->get_result()->fetch_assoc()) {
-        $error = "Usuário ou e-mail já existe.";
+    if ($stmt->get_result()->num_rows > 0) {
+        $error = "Usuário ou email já registrado.";
     } else {
-        $stmt = $conn->prepare("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $username, $password, $email, $role);
-        $stmt->execute();
-        header("Location: login.php");
-        exit;
+        // Insere o novo usuário
+        $stmt = $conn->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("ssss", $username, $email, $password, $role);
+        if ($stmt->execute()) {
+            $_SESSION['user_id'] = $stmt->insert_id;
+            $_SESSION['username'] = $username;
+            $_SESSION['role'] = $role;
+            header("Location: index.php");
+            exit;
+        } else {
+            $error = "Erro ao registrar: " . $conn->error;
+        }
     }
 }
 ?>
@@ -27,25 +38,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro - Eskort</title>
+    <title>Cadastro - Eskort</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="login-container">
-        <h1>Registro</h1>
+        <h2>Cadastro</h2>
         <?php if (isset($error)): ?>
-            <p style="color: red;"><?php echo $error; ?></p>
+            <p class="error"><?php echo htmlspecialchars($error); ?></p>
         <?php endif; ?>
-        <form method="post">
-            <label>Usuário:</label>
-            <input type="text" name="username" required>
-            <label>E-mail:</label>
-            <input type="email" name="email" required>
-            <label>Senha:</label>
-            <input type="password" name="password" required>
-            <button type="submit">Registrar</button>
-            <p>Já tem conta? <a href="login.php">Faça login</a></p>
+        <form method="post" action="register.php">
+            <div class="form-group">
+                <label for="username">Usuário:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Senha:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="role">Tipo:</label>
+                <select id="role" name="role">
+                    <option value="client">Cliente</option>
+                    <option value="escort">Acompanhante/Criadora</option>
+                </select>
+            </div>
+            <button type="submit">Cadastrar</button>
         </form>
+        <p>Já tem conta? <a href="login.php">Entre aqui</a></p>
     </div>
 </body>
 </html>

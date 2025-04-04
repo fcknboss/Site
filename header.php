@@ -11,9 +11,7 @@ session_start();
         <button type="button">Pesquisar</button>
     </div>
     <nav class="top-right">
-        <a href="index.php"> 
-   
-Home</a>
+        <a href="index.php">Home</a>
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
             <a href="admin.php">Admin</a>
         <?php endif; ?>

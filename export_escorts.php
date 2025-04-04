@@ -7,18 +7,25 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 }
 
 $conn = getDBConnection();
-$result = $conn->query("SELECT e.id, e.name, e.age, e.description, e.services, e.rates, e.availability, e.type, e.is_online, e.physical_traits, e.phone, e.height, e.weight, e.languages, e.views, e.latitude, e.longitude, u.username 
-                        FROM escorts e 
-                        JOIN users u ON e.user_id = u.id");
+$fields = isset($_POST['fields']) ? $_POST['fields'] : ['name', 'type', 'views'];
+$field_map = [
+    'name' => 'e.name',
+    'type' => 'e.type',
+    'views' => 'e.views'
+];
+$selected_fields = array_intersect_key($field_map, array_flip($fields));
+$query_fields = implode(', ', $selected_fields);
+
+$result = $conn->query("SELECT $query_fields FROM escorts e JOIN users u ON e.user_id = u.id");
 
 header('Content-Type: text/csv');
 header('Content-Disposition: attachment; filename="escorts_export.csv"');
 
 $output = fopen('php://output', 'w');
-fputcsv($output, ['ID', 'Nome', 'Idade', 'Descrição', 'Serviços', 'Tarifas', 'Disponibilidade', 'Tipo', 'Online', 'Características Físicas', 'Telefone', 'Altura', 'Peso', 'Idiomas', 'Visualizações', 'Latitude', 'Longitude', 'Usuário']);
+fputcsv($output, array_keys($selected_fields));
 
 while ($row = $result->fetch_assoc()) {
-    fputcsv($output, [$row['id'], $row['name'], $row['age'], $row['description'], $row['services'], $row['rates'], $row['availability'], $row['type'], $row['is_online'], $row['physical_traits'], $row['phone'], $row['height'], $row['weight'], $row['languages'], $row['views'], $row['latitude'], $row['longitude'], $row['username']]);
+    fputcsv($output, array_values($row));
 }
 
 fclose($output);

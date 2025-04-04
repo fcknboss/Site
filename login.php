@@ -1,24 +1,40 @@
 <?php
 session_start();
-include 'config.php';
+require_once 'config.php'; // Garantir que config.php seja incluído
 
+// Conexão com o banco
+$conn = getDBConnection(); // Inicializa a conexão e seleciona o banco eskort
+
+// Verifica se o formulário foi enviado
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'];
-    $password = $_POST['password'];
-    $stmt = $conn->prepare("SELECT id, role, password FROM users WHERE username = ?");
+    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
+    $password = $_POST['password']; // Senha não precisa de sanitização aqui, será verificada com password_verify
+
+    // Prepara a consulta para buscar o usuário
+    $stmt = $conn->prepare("SELECT id, username, password, role FROM users WHERE username = ?");
+    if (!$stmt) {
+        logError("Erro ao preparar a consulta: " . $conn->error);
+        die("Erro ao preparar a consulta. Veja o log para detalhes.");
+    }
     $stmt->bind_param("s", $username);
     $stmt->execute();
     $result = $stmt->get_result();
-    if ($row = $result->fetch_assoc()) {
-        if (password_verify($password, $row['password'])) {
-            $_SESSION['user_id'] = $row['id'];
-            $_SESSION['role'] = $row['role'];
-            $_SESSION['last_activity'] = time(); // Inicia a sessão
-            header("Location: index.php");
-            exit;
+    $user = $result->fetch_assoc();
+
+    // Verifica se o usuário existe e a senha está correta
+    if ($user && password_verify($password, $user['password'])) {
+        // Inicia a sessão com os dados do usuário
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+
+        // Redireciona com base no papel do usuário
+        if ($user['role'] === 'admin') {
+            header("Location: admin.php");
         } else {
-            $error = "Usuário ou senha inválidos.";
+            header("Location: index.php");
         }
+        exit;
     } else {
         $error = "Usuário ou senha inválidos.";
     }
@@ -35,20 +51,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <div class="login-container">
-        <h1>Login</h1>
+        <h2>Login</h2>
         <?php if (isset($error)): ?>
-            <p style="color: red;"><?php echo $error; ?></p>
-        <?php elseif (isset($_GET['timeout'])): ?>
-            <p style="color: red;">Sessão expirada. Faça login novamente.</p>
+            <p class="error"><?php echo htmlspecialchars($error); ?></p>
         <?php endif; ?>
-        <form method="post">
-            <label>Usuário:</label>
-            <input type="text" name="username" required>
-            <label>Senha:</label>
-            <input type="password" name="password" required>
+        <form method="post" action="login.php">
+            <div class="form-group">
+                <label for="username">Usuário:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Senha:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
             <button type="submit">Entrar</button>
-            <p>Não tem conta? <a href="register.php">Registre-se</a></p>
         </form>
+        <p>Não tem conta? <a href="register.php">Cadastre-se</a></p>
     </div>
 </body>
 </html>

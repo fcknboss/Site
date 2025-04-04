@@ -8,6 +8,14 @@ $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($page - 1) * $items_per_page;
 
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
+$category = isset($_GET['category']) ? (int)$_GET['category'] : 0;
+$order = in_array($_GET['order'] ?? '', ['views', 'name', 'distance']) ? $_GET['order'] : 'views';
+$age_min = isset($_GET['age_min']) ? (int)$_GET['age_min'] : 0;
+$views_min = isset($_GET['views_min']) ? (int)$_GET['views_min'] : 0;
+$lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 0;
+$lon = isset($_GET['lon']) ? (float)$_GET['lon'] : 0;
+
 $where = [];
 $params = [];
 $types = '';
@@ -19,9 +27,33 @@ if (!empty($search)) {
     $params[] = '%' . $search . '%';
     $types .= 'ssss';
 }
+if (!empty($keyword)) {
+    $where[] = "k.keyword = ?";
+    $params[] = $keyword;
+    $types .= 's';
+}
+if ($category > 0) {
+    $where[] = "ec.category_id = ?";
+    $params[] = $category;
+    $types .= 'i';
+}
+if ($age_min > 0) {
+    $where[] = "e.age >= ?";
+    $params[] = $age_min;
+    $types .= 'i';
+}
+if ($views_min > 0) {
+    $where[] = "e.views >= ?";
+    $params[] = $views_min;
+    $types .= 'i';
+}
 $base_where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
-$total_query = "SELECT COUNT(*) as total FROM escorts e $base_where_clause";
+$total_query = "SELECT COUNT(DISTINCT e.id) as total 
+                FROM escorts e 
+                LEFT JOIN escort_categories ec ON e.id = ec.escort_id 
+                LEFT JOIN keywords k ON e.id = k.escort_id 
+                $base_where_clause";
 $stmt_total = $conn->prepare($total_query);
 if ($types) {
     $stmt_total->bind_param($types, ...$params);
@@ -30,7 +62,7 @@ $stmt_total->execute();
 $total_profiles = $stmt_total->get_result()->fetch_assoc()['total'];
 $total_pages = ceil($total_profiles / $items_per_page);
 
-$latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_assoc()['latest'] ?? 0;
+$categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fetch_all(MYSQLI_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -46,8 +78,10 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
         .suggestions div:hover { background: #F6ECB2; }
         #loading { text-align: center; padding: 20px; display: none; color: #E95B95; }
         .top-bar { justify-content: center; }
-        .top-center { flex-grow: 1; max-width: 600px; display: flex; align-items: center; gap: 10px; }
+        .top-center { flex-grow: 1; max-width: 1200px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         #notification { position: fixed; top: 60px; right: 20px; background: #E95B95; color: white; padding: 10px; border-radius: 5px; display: none; z-index: 1000; }
+        .similar-profiles { margin-top: 20px; }
+        .profile-preview p { margin: 5px 0; }
     </style>
 </head>
 <body>
@@ -55,10 +89,30 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
         <div class="top-center">
             <h2 style="color: #E95B95; margin: 0;">Eskort</h2>
             <div style="position: relative; flex-grow: 1;">
-                <input type="text" id="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="Busque pornstars e acompanhantes..." onkeyup="suggest(this.value)">
-                <div id="suggestions" class="suggestions"></div>
+                <input type="text" id="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="Busque por nome..." onkeyup="suggest(this.value, 'search')">
+                <div id="search-suggestions" class="suggestions"></div>
             </div>
+            <div style="position: relative;">
+                <input type="text" id="keyword-input" value="<?php echo htmlspecialchars($keyword); ?>" placeholder="Busque por palavra-chave..." onkeyup="suggest(this.value, 'keyword')">
+                <div id="keyword-suggestions" class="suggestions"></div>
+            </div>
+            <select id="category-filter">
+                <option value="0">Todas as Categorias</option>
+                <?php foreach ($categories as $cat): ?>
+                    <option value="<?php echo $cat['id']; ?>" <?php echo $category == $cat['id'] ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($cat['name']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <select id="order-filter">
+                <option value="views" <?php echo $order === 'views' ? 'selected' : ''; ?>>Mais Vistos</option>
+                <option value="name" <?php echo $order === 'name' ? 'selected' : ''; ?>>Nome</option>
+                <option value="distance" <?php echo $order === 'distance' ? 'selected' : ''; ?>>Proximidade</option>
+            </select>
+            <input type="number" id="age-min-filter" value="<?php echo $age_min; ?>" placeholder="Idade Mínima" min="18" style="width: 100px;">
+            <input type="number" id="views-min-filter" value="<?php echo $views_min; ?>" placeholder="Views Mínimos" min="0" style="width: 100px;">
             <button onclick="filterProfiles()" class="search-btn">🔍</button>
+            <button onclick="getUserLocation()" class="geo-btn">📍 Perto de Mim</button>
         </div>
     </div>
 
@@ -72,13 +126,17 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                             <button class="carousel-prev" onclick="carouselPrev()">◄</button>
                             <div class="carousel-inner">
                                 <?php
-                                $highlight_query = "SELECT e.id, e.name, e.profile_photo FROM escorts e ORDER BY e.views DESC LIMIT 3";
+                                $highlight_query = "SELECT e.id, e.name, e.profile_photo 
+                                                    FROM escorts e 
+                                                    WHERE e.views > 0 
+                                                    ORDER BY e.views DESC, e.id DESC 
+                                                    LIMIT 3";
                                 $highlight_result = $conn->query($highlight_query);
                                 while ($highlight = $highlight_result->fetch_assoc()) {
                                     $photo = $highlight['profile_photo'] ?: 'uploads/default.jpg';
                                     $photo_webp = str_replace('.jpg', '.webp', $photo);
                                     echo "<div class='carousel-item'>";
-                                    echo "<a href='profile.php?id=" . $highlight['id'] . "'>";
+                                    echo "<a href='public_profile.php?id=" . $highlight['id'] . "'>";
                                     echo "<picture>";
                                     echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
                                     echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($highlight['name']) . "' class='lazy-load'>";
@@ -95,12 +153,22 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                     <h3>Resultados (<?php echo $total_profiles; ?> encontrados)</h3>
                     <div class="feed-grid" id="profiles-grid">
                         <?php
-                        $query = "SELECT e.id, e.name, e.profile_photo, e.description, e.type, e.is_online, e.views, 
+                        $order_clause = $order === 'distance' && $lat && $lon 
+                            ? "ORDER BY (6371 * acos(cos(radians(?)) * cos(radians(e.latitude)) * cos(radians(e.longitude) - radians(?)) + sin(radians(?)) * sin(radians(e.latitude)))) ASC"
+                            : "ORDER BY e.$order DESC, e.id DESC";
+                        if ($order === 'distance' && $lat && $lon) {
+                            $params = array_merge([$lat, $lon, $lat], $params);
+                            $types = 'ddd' . $types;
+                        }
+
+                        $query = "SELECT e.id, e.name, e.profile_photo, e.description, e.type, e.is_online, e.views, e.tags, e.latitude, e.longitude, 
                                          (SELECT GROUP_CONCAT(photo_path) FROM photos p WHERE p.escort_id = e.id LIMIT 2) as additional_photos 
                                   FROM escorts e 
+                                  LEFT JOIN escort_categories ec ON e.id = ec.escort_id 
+                                  LEFT JOIN keywords k ON e.id = k.escort_id 
                                   $base_where_clause 
                                   GROUP BY e.id 
-                                  ORDER BY e.views DESC, e.id DESC 
+                                  $order_clause 
                                   LIMIT ? OFFSET ?";
                         $stmt = $conn->prepare($query);
                         if ($types) {
@@ -110,13 +178,15 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                         }
                         $stmt->execute();
                         $result = $stmt->get_result();
+                        $tags_searched = !empty($search) ? array_map('trim', explode(',', strtolower($search))) : [];
                         if ($result->num_rows > 0) {
                             while ($row = $result->fetch_assoc()) {
                                 $photo = $row['profile_photo'] ?: 'uploads/default.jpg';
                                 $photo_webp = str_replace('.jpg', '.webp', $photo);
                                 $additional_photos = $row['additional_photos'] ? explode(',', $row['additional_photos']) : [];
-                                echo "<div class='feed-card' data-id='{$row['id']}' onmouseover='showPreview(event, this, \"".htmlspecialchars($row['description'])."\")' onmouseout='hidePreview()'>";
-                                echo "<a href='profile.php?id=" . $row['id'] . "'>";
+                                $distance = $lat && $lon ? round(6371 * acos(cos(deg2rad($lat)) * cos(deg2rad($row['latitude'])) * cos(deg2rad($row['longitude']) - deg2rad($lon)) + sin(deg2rad($lat)) * sin(deg2rad($row['latitude']))), 2) : null;
+                                echo "<div class='feed-card' data-id='{$row['id']}' onmouseover='showPreview(event, this, \"".htmlspecialchars($row['description'])."\", \"".htmlspecialchars($row['tags'])."\", \"$distance\")' onmouseout='hidePreview()'>";
+                                echo "<a href='public_profile.php?id=" . $row['id'] . "'>";
                                 echo "<div class='photo-container'>";
                                 echo "<picture>";
                                 echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
@@ -132,12 +202,49 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                                 echo "</div>";
                                 echo "<h4>" . htmlspecialchars($row['name']) . "</h4>";
                                 echo "</a>";
-                                echo "<p>" . ($row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $row['views'] . " views</p>";
+                                echo "<p>" . ($row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $row['views'] . " views" . ($distance ? " • $distance km" : "") . "</p>";
                                 echo "<span class='online-status " . ($row['is_online'] ? 'online' : 'offline') . "'>" . ($row['is_online'] ? 'Online' : 'Offline') . "</span>";
                                 echo "</div>";
+
+                                if (!empty($tags_searched) && !empty($row['tags'])) {
+                                    $profile_tags = array_map('trim', explode(',', strtolower($row['tags'])));
+                                    $similarity = count(array_intersect($tags_searched, $profile_tags));
+                                    if ($similarity > 0) {
+                                        $similar[$row['id']] = $similarity;
+                                    }
+                                }
                             }
                         } else {
                             echo "<p>Nenhum perfil encontrado.</p>";
+                        }
+
+                        if (!empty($similar)) {
+                            arsort($similar);
+                            echo "<div class='similar-profiles'><h3>Perfis Similares</h3><div class='feed-grid'>";
+                            $similar_ids = array_keys(array_slice($similar, 0, 3, true));
+                            $similar_query = "SELECT e.id, e.name, e.profile_photo, e.type, e.is_online, e.views 
+                                              FROM escorts e 
+                                              WHERE e.id IN (" . implode(',', $similar_ids) . ") 
+                                              ORDER BY FIELD(e.id, " . implode(',', $similar_ids) . ")";
+                            $similar_result = $conn->query($similar_query);
+                            while ($similar_row = $similar_result->fetch_assoc()) {
+                                $photo = $similar_row['profile_photo'] ?: 'uploads/default.jpg';
+                                $photo_webp = str_replace('.jpg', '.webp', $photo);
+                                echo "<div class='feed-card' data-id='{$similar_row['id']}'>";
+                                echo "<a href='public_profile.php?id=" . $similar_row['id'] . "'>";
+                                echo "<div class='photo-container'>";
+                                echo "<picture>";
+                                echo "<source srcset='" . htmlspecialchars($photo_webp) . "' type='image/webp'>";
+                                echo "<img data-src='" . htmlspecialchars($photo) . "' alt='" . htmlspecialchars($similar_row['name']) . "' class='lazy-load'>";
+                                echo "</picture>";
+                                echo "</div>";
+                                echo "<h4>" . htmlspecialchars($similar_row['name']) . "</h4>";
+                                echo "</a>";
+                                echo "<p>" . ($similar_row['type'] === 'acompanhante' ? 'Acompanhante' : 'Pornstar') . " • " . $similar_row['views'] . " views</p>";
+                                echo "<span class='online-status " . ($similar_row['is_online'] ? 'online' : 'offline') . "'>" . ($similar_row['is_online'] ? 'Online' : 'Offline') . "</span>";
+                                echo "</div>";
+                            }
+                            echo "</div></div>";
                         }
                         ?>
                     </div>
@@ -148,7 +255,7 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
     </div>
 
     <div id="profile-preview" class="profile-preview"></div>
-    <div id="notification">Novo perfil adicionado!</div>
+    <div id="notification" style="display: none;"></div>
 
     <button class="back-to-top" onclick="scrollToTop()">↑</button>
 
@@ -156,28 +263,45 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
         let page = <?php echo $page; ?>;
         let loading = false;
         let totalPages = <?php echo $total_pages; ?>;
-        let latestPostId = <?php echo $latest_post_id; ?>;
+        let lat = <?php echo $lat; ?>;
+        let lon = <?php echo $lon; ?>;
+        const ws = new WebSocket('ws://localhost:8080'); // Configure um servidor WebSocket
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'new_profile') {
+                const notification = document.getElementById('notification');
+                notification.textContent = 'Novo perfil adicionado: ' + data.name;
+                notification.style.display = 'block';
+                setTimeout(() => notification.style.display = 'none', 3000);
+            }
+        };
 
         function filterProfiles() {
             const search = document.getElementById('search-input').value;
-            window.location.href = `?search=${encodeURIComponent(search)}`;
+            const keyword = document.getElementById('keyword-input').value;
+            const category = document.getElementById('category-filter').value;
+            const order = document.getElementById('order-filter').value;
+            const ageMin = document.getElementById('age-min-filter').value;
+            const viewsMin = document.getElementById('views-min-filter').value;
+            window.location.href = `?search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}`;
         }
 
-        function suggest(query) {
+        function suggest(query, type) {
             if (query.length < 2) {
-                document.getElementById('suggestions').style.display = 'none';
+                document.getElementById(type + '-suggestions').style.display = 'none';
                 return;
             }
-            fetch(`suggest.php?q=${encodeURIComponent(query)}`)
+            fetch(`suggest.php?q=${encodeURIComponent(query)}&type=${type}`)
                 .then(response => response.json())
                 .then(data => {
-                    const suggestions = document.getElementById('suggestions');
+                    const suggestions = document.getElementById(type + '-suggestions');
                     suggestions.innerHTML = '';
                     data.forEach(item => {
                         const div = document.createElement('div');
                         div.textContent = item;
                         div.onclick = () => {
-                            document.getElementById('search-input').value = item;
+                            document.getElementById(type + '-input').value = item;
                             suggestions.style.display = 'none';
                             filterProfiles();
                         };
@@ -193,7 +317,12 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
             document.getElementById('loading').style.display = 'block';
 
             const search = document.getElementById('search-input').value;
-            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}`;
+            const keyword = document.getElementById('keyword-input').value;
+            const category = document.getElementById('category-filter').value;
+            const order = document.getElementById('order-filter').value;
+            const ageMin = document.getElementById('age-min-filter').value;
+            const viewsMin = document.getElementById('views-min-filter').value;
+            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}`;
 
             const cached = localStorage.getItem(url);
             if (cached) {
@@ -221,13 +350,13 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                 const card = document.createElement('div');
                 card.className = 'feed-card';
                 card.dataset.id = profile.id;
-                card.onmouseover = () => showPreview(event, card, profile.description);
+                card.onmouseover = () => showPreview(event, card, profile.description, profile.tags, profile.distance);
                 card.onmouseout = hidePreview;
                 const photo = profile.profile_photo || 'uploads/default.jpg';
                 const photoWebp = photo.replace('.jpg', '.webp');
                 const additionalPhotos = profile.additional_photos ? profile.additional_photos.split(',') : [];
                 card.innerHTML = `
-                    <a href="profile.php?id=${profile.id}">
+                    <a href="public_profile.php?id=${profile.id}">
                         <div class="photo-container">
                             <picture>
                                 <source srcset="${photoWebp}" type="image/webp">
@@ -242,7 +371,7 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                         </div>
                         <h4>${profile.name}</h4>
                     </a>
-                    <p>${profile.type === 'acompanhante' ? 'Acompanhante' : 'Pornstar'} • ${profile.views} views</p>
+                    <p>${profile.type === 'acompanhante' ? 'Acompanhante' : 'Pornstar'} • ${profile.views} views${profile.distance ? ' • ' + profile.distance + ' km' : ''}</p>
                     <span class="online-status ${profile.is_online ? 'online' : 'offline'}">${profile.is_online ? 'Online' : 'Offline'}</span>
                 `;
                 grid.appendChild(card);
@@ -250,7 +379,7 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
             lazyLoadImages();
         }
 
-        function showPreview(event, card, description) {
+        function showPreview(event, card, description, tags, distance) {
             const preview = document.getElementById('profile-preview');
             const rect = card.getBoundingClientRect();
             preview.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
@@ -259,6 +388,8 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                 <div class="preview-content">
                     <h4>${card.querySelector('h4').textContent}</h4>
                     <p>${description || 'Sem descrição'}</p>
+                    <p><strong>Tags:</strong> ${tags || 'Sem tags'}</p>
+                    ${distance ? '<p><strong>Distância:</strong> ' + distance + ' km</p>' : ''}
                 </div>
             `;
             preview.style.display = 'block';
@@ -287,17 +418,17 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function checkNewPosts() {
-            fetch('check_posts.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.latest_post_id > latestPostId) {
-                        latestPostId = data.latest_post_id;
-                        const notification = document.getElementById('notification');
-                        notification.style.display = 'block';
-                        setTimeout(() => notification.style.display = 'none', 3000);
-                    }
-                });
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    lat = position.coords.latitude;
+                    lon = position.coords.longitude;
+                    document.getElementById('order-filter').value = 'distance';
+                    filterProfiles();
+                }, () => alert('Não foi possível obter sua localização.'));
+            } else {
+                alert('Geolocalização não suportada pelo navegador.');
+            }
         }
 
         function carouselPrev() {
@@ -325,8 +456,7 @@ $latest_post_id = $conn->query("SELECT MAX(id) as latest FROM posts")->fetch_ass
                 }
             });
             lazyLoadImages();
-            setInterval(checkNewPosts, 60000); // Checa novos posts a cada minuto
-            document.querySelector('.carousel-item').classList.add('active'); // Inicia carrossel
+            document.querySelector('.carousel-item').classList.add('active');
         });
     </script>
 </body>
