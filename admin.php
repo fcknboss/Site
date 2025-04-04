@@ -74,17 +74,24 @@ else $stmt->bind_param('ii', $items_per_page, $offset);
 $stmt->execute() or logError("Erro ao buscar escorts: " . $conn->error);
 $escorts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Estatísticas
-$stmt = $conn->prepare("SELECT COUNT(CASE WHEN e.type = 'acompanhante' THEN 1 END) as acompanhantes,
-                              COUNT(CASE WHEN e.type = 'criadora' THEN 1 END) as pornstars,
-                              SUM(e.views) as total_views,
-                              (SELECT COUNT(*) FROM favorites WHERE admin_id = ?) as favorites,
-                              (SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND is_read = 0) as unread_messages,
-                              (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules
-                       FROM escorts e");
-$stmt->bind_param("ii", $_SESSION['user_id'], $_SESSION['user_id']);
-$stmt->execute() or logError("Erro ao buscar estatísticas: " . $conn->error);
-$stats = $stmt->get_result()->fetch_assoc();
+// Estatísticas com cache
+$cache_file = 'cache/stats_' . $_SESSION['user_id'] . '.json';
+$cache_time = 300; // 5 minutos
+if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_time) {
+    $stats = json_decode(file_get_contents($cache_file), true);
+} else {
+    $stmt = $conn->prepare("SELECT COUNT(CASE WHEN e.type = 'acompanhante' THEN 1 END) as acompanhantes,
+                                  COUNT(CASE WHEN e.type = 'criadora' THEN 1 END) as pornstars,
+                                  SUM(e.views) as total_views,
+                                  (SELECT COUNT(*) FROM favorites WHERE admin_id = ?) as favorites,
+                                  (SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND is_read = 0) as unread_messages,
+                                  (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules
+                           FROM escorts e");
+    $stmt->bind_param("ii", $_SESSION['user_id'], $_SESSION['user_id']);
+    $stmt->execute() or logError("Erro ao buscar estatísticas: " . $conn->error);
+    $stats = $stmt->get_result()->fetch_assoc();
+    file_put_contents($cache_file, json_encode($stats));
+}
 
 // Log de busca
 if ($filters['search']) {
@@ -121,6 +128,8 @@ if (isset($_POST['moderate_photos']) && $photos) {
         if (@file_get_contents("http://localhost:8080?msg=" . urlencode($notification)) === false) {
             logError("Falha ao enviar notificação WebSocket: " . error_get_last()['message']);
         }
+        // Invalida o cache após moderação
+        if (file_exists($cache_file)) unlink($cache_file);
         header("Location: admin.php#photo-moderation");
         exit;
     }
