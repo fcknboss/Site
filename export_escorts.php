@@ -1,10 +1,14 @@
 <?php
-session_start();
+require_once 'session.php';
 require_once 'config.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     header("Location: login.php");
     exit;
+}
+
+if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    die("Erro de segurança: Token CSRF inválido.");
 }
 
 $conn = getDBConnection();

@@ -70,7 +70,7 @@ $offset_escorts = ($page_escorts - 1) * $items_per_page;
 $filter_type = isset($_GET['filter_type']) ? trim($_GET['filter_type']) : '';
 $filter_online = isset($_GET['filter_online']) ? (int)$_GET['filter_online'] : -1;
 $filter_search = isset($_GET['filter_search']) ? trim($_GET['filter_search']) : '';
-$filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min'] : 0;
+$filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min']) : 0;
 $filter_tag = isset($_GET['filter_tag']) ? trim($_GET['filter_tag']) : '';
 $export_category = isset($_POST['export_category']) ? (int)$_POST['export_category'] : 0;
 
@@ -202,6 +202,9 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 $stmt->bind_param("is", $photo_id, $action);
                 $stmt->execute();
             }
+            // Enviar notificação via WebSocket
+            $notification = json_encode(['type' => 'photo_moderation', 'message' => "Fotos moderadas: " . count($photo_ids) . " marcadas como '$action' por " . $_SESSION['username']]);
+            file_get_contents("http://localhost:8080?msg=" . urlencode($notification));
             header("Location: admin.php#photo-moderation");
             exit;
         } catch (mysqli_sql_exception $e) {
@@ -404,6 +407,20 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
         let page = <?php echo $page_escorts; ?>;
         const itemsPerPage = <?php echo $items_per_page; ?>;
 
+        // WebSocket para notificações em tempo real
+        const socket = new WebSocket('ws://localhost:8080');
+        socket.onopen = () => console.log('Conectado ao WebSocket');
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            Toastify({
+                text: data.message,
+                duration: 5000,
+                style: { background: data.type === 'photo_moderation' ? '#28A745' : '#1877F2' }
+            }).showToast();
+        };
+        socket.onerror = (error) => console.error('Erro no WebSocket:', error);
+        socket.onclose = () => console.log('Desconectado do WebSocket');
+
         function showDeletePopup(id) {
             if (isDeleting) return;
             const popup = document.getElementById('delete-popup');
@@ -438,6 +455,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                             duration: 3000,
                             style: { background: "#28A745" }
                         }).showToast();
+                        socket.send(JSON.stringify({ type: 'delete', message: `Perfil ID ${id} excluído por <?php echo $_SESSION['username']; ?>` }));
                         setTimeout(() => {
                             closeDeletePopup();
                             location.reload();
@@ -495,6 +513,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         duration: 3000,
                         style: { background: "#28A745" }
                     }).showToast();
+                    socket.send(JSON.stringify({ type: 'favorite', message: `${data.message} para ID ${id} por <?php echo $_SESSION['username']; ?>` }));
                     setTimeout(() => location.reload(), 1000);
                 } else {
                     feedback.textContent = 'Erro: ' + data.message;
@@ -535,6 +554,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         duration: 3000,
                         style: { background: "#28A745" }
                     }).showToast();
+                    socket.send(JSON.stringify({ type: 'highlight', message: `Destaque alterado para ID ${id} por <?php echo $_SESSION['username']; ?>` }));
                     setTimeout(() => location.reload(), 1000);
                 } else {
                     feedback.textContent = 'Erro: ' + data.message;
@@ -615,6 +635,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         duration: 3000,
                         style: { background: "#28A745" }
                     }).showToast();
+                    socket.send(JSON.stringify({ type: 'import', message: `Importação concluída: ${data.inserted} inseridos, ${data.updated} atualizados por <?php echo $_SESSION['username']; ?>` }));
                     setTimeout(() => location.reload(), 2000);
                 } else {
                     resultDiv.className = 'error';
