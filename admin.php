@@ -1,7 +1,5 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once 'session.php'; // Centraliza a sessão
 require_once 'config.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
@@ -50,7 +48,7 @@ function checkDatabaseIntegrity($conn) {
     return empty($errors) ? true : $errors;
 }
 
-// Executa a verificação
+// Verifica o banco
 $db_check = checkDatabaseIntegrity($conn);
 if ($db_check !== true) {
     echo "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><title>Erro no Banco de Dados</title>";
@@ -64,7 +62,7 @@ if ($db_check !== true) {
     exit;
 }
 
-// Prossegue com o código se o banco estiver OK
+// Configuração da página
 $items_per_page = 10;
 $page_escorts = isset($_GET['page_escorts']) ? max(1, (int)$_GET['page_escorts']) : 1;
 $offset_escorts = ($page_escorts - 1) * $items_per_page;
@@ -189,6 +187,9 @@ if ($photo_moderation_exists) {
 }
 
 if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Erro de segurança: Token CSRF inválido.");
+    }
     $photo_ids = isset($_POST['photo_ids']) ? $_POST['photo_ids'] : [];
     $action = in_array($_POST['action'], ['approve', 'reject']) ? $_POST['action'] : 'pending';
     if (!empty($photo_ids)) {
@@ -218,6 +219,8 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
     <title>Painel de Administração - Eskort</title>
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 </head>
 <body>
     <?php include 'header.php'; ?>
@@ -258,12 +261,15 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 <h2>Gerenciar Perfis</h2>
                 <div class="action-bar">
                     <form class="export-form" action="export_escorts.php" method="POST">
+                        <?php $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); ?>
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <label><input type="checkbox" name="fields[]" value="name" checked> Nome</label>
                         <label><input type="checkbox" name="fields[]" value="type"> Tipo</label>
                         <label><input type="checkbox" name="fields[]" value="views"> Views</label>
                         <button type="submit" class="btn" aria-label="Exportar perfis como CSV">Exportar CSV</button>
                     </form>
                     <form class="export-form" action="export_pdf.php" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <select name="export_category" aria-label="Selecionar categoria para exportação">
                             <option value="0">Todas as Categorias</option>
                             <?php foreach ($categories as $cat): ?>
@@ -294,41 +300,43 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                     <input type="text" name="filter_tag" value="<?php echo htmlspecialchars($filter_tag); ?>" placeholder="Tag (ex: loira)" aria-label="Filtrar por tag">
                     <button type="submit" class="btn" aria-label="Aplicar filtros">Filtrar</button>
                 </form>
-                <table class="admin-table" role="grid">
-                    <thead>
-                        <tr>
-                            <th aria-sort="none" onclick="sortTable(0)">ID</th>
-                            <th aria-sort="none" onclick="sortTable(1)">Nome</th>
-                            <th aria-sort="none" onclick="sortTable(2)">Tipo</th>
-                            <th aria-sort="none" onclick="sortTable(3)">Online</th>
-                            <th aria-sort="none" onclick="sortTable(4)">Views</th>
-                            <th aria-sort="none" onclick="sortTable(5)">Lat/Long</th>
-                            <th aria-sort="none" onclick="sortTable(6)">Usuário</th>
-                            <th aria-sort="none" onclick="sortTable(7)">Favoritos Públicos</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($escorts as $escort): ?>
+                <div id="escorts-table-container">
+                    <table class="admin-table" role="grid">
+                        <thead>
                             <tr>
-                                <td><?php echo $escort['id']; ?></td>
-                                <td><?php echo htmlspecialchars($escort['name']); ?></td>
-                                <td><?php echo $escort['type']; ?></td>
-                                <td><?php echo $escort['is_online'] ? 'Sim' : 'Não'; ?></td>
-                                <td><?php echo $escort['views']; ?></td>
-                                <td><?php echo $escort['latitude'] . ', ' . $escort['longitude']; ?></td>
-                                <td><?php echo htmlspecialchars($escort['username']); ?></td>
-                                <td><?php echo $escort['public_favorites']; ?></td>
-                                <td>
-                                    <a href="edit_escort.php?id=<?php echo $escort['id']; ?>" class="btn" aria-label="Editar perfil <?php echo htmlspecialchars($escort['name']); ?>">Editar</a>
-                                    <button onclick="toggleFavorite(<?php echo $escort['id']; ?>, this)" class="btn" aria-label="Favoritar perfil <?php echo htmlspecialchars($escort['name']); ?>">Favoritar<span class="action-feedback" id="favorite-feedback-<?php echo $escort['id']; ?>"></span></button>
-                                    <button onclick="toggleHighlight(<?php echo $escort['id']; ?>, this)" class="btn" aria-label="Destacar perfil <?php echo htmlspecialchars($escort['name']); ?>">Destacar<span class="action-feedback" id="highlight-feedback-<?php echo $escort['id']; ?>"></span></button>
-                                    <button onclick="showDeletePopup(<?php echo $escort['id']; ?>)" class="btn" aria-label="Excluir perfil <?php echo htmlspecialchars($escort['name']); ?>">Excluir</button>
-                                </td>
+                                <th aria-sort="none" onclick="sortTable(0)">ID</th>
+                                <th aria-sort="none" onclick="sortTable(1)">Nome</th>
+                                <th aria-sort="none" onclick="sortTable(2)">Tipo</th>
+                                <th aria-sort="none" onclick="sortTable(3)">Online</th>
+                                <th aria-sort="none" onclick="sortTable(4)">Views</th>
+                                <th aria-sort="none" onclick="sortTable(5)">Lat/Long</th>
+                                <th aria-sort="none" onclick="sortTable(6)">Usuário</th>
+                                <th aria-sort="none" onclick="sortTable(7)">Favoritos Públicos</th>
+                                <th>Ações</th>
                             </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody id="escorts-tbody">
+                            <?php foreach ($escorts as $escort): ?>
+                                <tr>
+                                    <td><?php echo $escort['id']; ?></td>
+                                    <td><?php echo htmlspecialchars($escort['name']); ?></td>
+                                    <td><?php echo $escort['type']; ?></td>
+                                    <td><?php echo $escort['is_online'] ? 'Sim' : 'Não'; ?></td>
+                                    <td><?php echo $escort['views']; ?></td>
+                                    <td><?php echo $escort['latitude'] . ', ' . $escort['longitude']; ?></td>
+                                    <td><?php echo htmlspecialchars($escort['username']); ?></td>
+                                    <td><?php echo $escort['public_favorites']; ?></td>
+                                    <td>
+                                        <a href="edit_escort.php?id=<?php echo $escort['id']; ?>" class="btn" aria-label="Editar perfil <?php echo htmlspecialchars($escort['name']); ?>">Editar</a>
+                                        <button onclick="toggleFavorite(<?php echo $escort['id']; ?>, this)" class="btn" aria-label="Favoritar perfil <?php echo htmlspecialchars($escort['name']); ?>">Favoritar<span class="action-feedback" id="favorite-feedback-<?php echo $escort['id']; ?>"></span></button>
+                                        <button onclick="toggleHighlight(<?php echo $escort['id']; ?>, this)" class="btn" aria-label="Destacar perfil <?php echo htmlspecialchars($escort['name']); ?>">Destacar<span class="action-feedback" id="highlight-feedback-<?php echo $escort['id']; ?>"></span></button>
+                                        <button onclick="showDeletePopup(<?php echo $escort['id']; ?>)" class="btn" aria-label="Excluir perfil <?php echo htmlspecialchars($escort['name']); ?>">Excluir</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="pagination">
                     <?php for ($i = 1; $i <= $total_pages_escorts; $i++): ?>
                         <a href="?page_escorts=<?php echo $i; ?>&filter_type=<?php echo urlencode($filter_type); ?>&filter_online=<?php echo $filter_online; ?>&filter_search=<?php echo urlencode($filter_search); ?>&filter_views_min=<?php echo $filter_views_min; ?>&filter_tag=<?php echo urlencode($filter_tag); ?>" class="<?php echo $i === $page_escorts ? 'active' : ''; ?>"><?php echo $i; ?></a>
@@ -344,6 +352,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                     <p>Nenhuma foto pendente para moderação.</p>
                 <?php else: ?>
                     <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <table class="admin-table" role="grid">
                             <thead>
                                 <tr>
@@ -359,7 +368,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                                     <tr>
                                         <td><input type="checkbox" name="photo_ids[]" value="<?php echo $photo['id']; ?>" aria-label="Selecionar foto ID <?php echo $photo['id']; ?>"></td>
                                         <td><?php echo $photo['id']; ?></td>
-                                        <td><img src="<?php echo htmlspecialchars($photo['photo_path']); ?>" alt="Foto de <?php echo htmlspecialchars($photo['escort_name']); ?>" style="max-width: 100px;"></td>
+                                        <td><img src="<?php echo htmlspecialchars($photo['photo_path']); ?>" alt="Foto de <?php echo htmlspecialchars($photo['escort_name']); ?>"></td>
                                         <td><?php echo htmlspecialchars($photo['escort_name']); ?></td>
                                         <td><?php echo $photo['status'] ?? 'Pendente'; ?></td>
                                     </tr>
@@ -392,6 +401,8 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
     <script>
         let sortDirection = {};
         let isDeleting = false;
+        let page = <?php echo $page_escorts; ?>;
+        const itemsPerPage = <?php echo $items_per_page; ?>;
 
         function showDeletePopup(id) {
             if (isDeleting) return;
@@ -415,13 +426,18 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 fetch('delete_escort.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `id=${id}`
+                    body: `id=${id}&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
                         feedback.textContent = 'Perfil excluído com sucesso!';
                         feedback.style.color = '#28A745';
+                        Toastify({
+                            text: "Perfil excluído com sucesso!",
+                            duration: 3000,
+                            style: { background: "#28A745" }
+                        }).showToast();
                         setTimeout(() => {
                             closeDeletePopup();
                             location.reload();
@@ -429,6 +445,11 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                     } else {
                         feedback.textContent = 'Erro: ' + data.message;
                         feedback.style.color = '#DC3545';
+                        Toastify({
+                            text: "Erro: " + data.message,
+                            duration: 3000,
+                            style: { background: "#DC3545" }
+                        }).showToast();
                         yesBtn.disabled = false;
                         cancelBtn.disabled = false;
                         isDeleting = false;
@@ -437,6 +458,11 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 .catch(error => {
                     feedback.textContent = 'Erro ao excluir: ' + error.message;
                     feedback.style.color = '#DC3545';
+                    Toastify({
+                        text: "Erro ao excluir: " + error.message,
+                        duration: 3000,
+                        style: { background: "#DC3545" }
+                    }).showToast();
                     yesBtn.disabled = false;
                     cancelBtn.disabled = false;
                     isDeleting = false;
@@ -457,23 +483,38 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
             fetch('toggle_favorite.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `escort_id=${id}`
+                body: `escort_id=${id}&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        feedback.textContent = '✓';
-                        setTimeout(() => feedback.textContent = '', 2000);
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        feedback.textContent = 'Erro: ' + data.message;
-                        feedback.style.color = '#DC3545';
-                    }
-                })
-                .catch(error => {
-                    feedback.textContent = 'Erro: ' + error.message;
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    feedback.textContent = '✓';
+                    setTimeout(() => feedback.textContent = '', 2000);
+                    Toastify({
+                        text: data.message,
+                        duration: 3000,
+                        style: { background: "#28A745" }
+                    }).showToast();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    feedback.textContent = 'Erro: ' + data.message;
                     feedback.style.color = '#DC3545';
-                });
+                    Toastify({
+                        text: "Erro: " + data.message,
+                        duration: 3000,
+                        style: { background: "#DC3545" }
+                    }).showToast();
+                }
+            })
+            .catch(error => {
+                feedback.textContent = 'Erro: ' + error.message;
+                feedback.style.color = '#DC3545';
+                Toastify({
+                    text: "Erro: " + error.message,
+                    duration: 3000,
+                    style: { background: "#DC3545" }
+                }).showToast();
+            });
         }
 
         function toggleHighlight(id, button) {
@@ -482,23 +523,38 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
             fetch('toggle_highlight.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `escort_id=${id}`
+                body: `escort_id=${id}&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        feedback.textContent = '✓';
-                        setTimeout(() => feedback.textContent = '', 2000);
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        feedback.textContent = 'Erro: ' + data.message;
-                        feedback.style.color = '#DC3545';
-                    }
-                })
-                .catch(error => {
-                    feedback.textContent = 'Erro: ' + error.message;
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    feedback.textContent = '✓';
+                    setTimeout(() => feedback.textContent = '', 2000);
+                    Toastify({
+                        text: "Destaque alterado com sucesso!",
+                        duration: 3000,
+                        style: { background: "#28A745" }
+                    }).showToast();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    feedback.textContent = 'Erro: ' + data.message;
                     feedback.style.color = '#DC3545';
-                });
+                    Toastify({
+                        text: "Erro: " + data.message,
+                        duration: 3000,
+                        style: { background: "#DC3545" }
+                    }).showToast();
+                }
+            })
+            .catch(error => {
+                feedback.textContent = 'Erro: ' + error.message;
+                feedback.style.color = '#DC3545';
+                Toastify({
+                    text: "Erro: " + error.message,
+                    duration: 3000,
+                    style: { background: "#DC3545" }
+                }).showToast();
+            });
         }
 
         function toggleSelectAll() {
@@ -537,30 +593,95 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
 
             const formData = new FormData();
             formData.append('csv_file', file);
+            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
 
             const resultDiv = document.getElementById('import-result');
-            resultDiv.style.display = 'none';
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'loading';
+            resultDiv.innerHTML = '<div class="spinner"></div> Importando...';
 
             fetch('import_escorts.php', {
                 method: 'POST',
                 body: formData
             })
+            .then(response => response.json())
+            .then(data => {
+                resultDiv.style.display = 'block';
+                if (data.status === 'success') {
+                    resultDiv.className = 'success';
+                    resultDiv.textContent = `Importação concluída! ${data.inserted} perfis inseridos, ${data.updated} atualizados.`;
+                    Toastify({
+                        text: "Importação concluída com sucesso!",
+                        duration: 3000,
+                        style: { background: "#28A745" }
+                    }).showToast();
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    resultDiv.className = 'error';
+                    resultDiv.textContent = `Erro na importação: ${data.message}`;
+                    Toastify({
+                        text: "Erro na importação: " + data.message,
+                        duration: 3000,
+                        style: { background: "#DC3545" }
+                    }).showToast();
+                }
+            })
+            .catch(error => {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                resultDiv.textContent = 'Erro ao processar o arquivo CSV: ' + error.message;
+                Toastify({
+                    text: "Erro ao processar o arquivo CSV: " + error.message,
+                    duration: 3000,
+                    style: { background: "#DC3545" }
+                }).showToast();
+            });
+        }
+
+        function loadMoreEscorts() {
+            page++;
+            fetch(`load_escorts.php?page=${page}&items_per_page=${itemsPerPage}&filter_type=<?php echo urlencode($filter_type); ?>&filter_online=<?php echo $filter_online; ?>&filter_search=<?php echo urlencode($filter_search); ?>&filter_views_min=<?php echo $filter_views_min; ?>&filter_tag=<?php echo urlencode($filter_tag); ?>&csrf_token=<?php echo $_SESSION['csrf_token']; ?>`)
                 .then(response => response.json())
                 .then(data => {
-                    resultDiv.style.display = 'block';
                     if (data.status === 'success') {
-                        resultDiv.className = 'success';
-                        resultDiv.textContent = `Importação concluída! ${data.inserted} perfis inseridos, ${data.updated} atualizados.`;
-                        setTimeout(() => location.reload(), 2000);
+                        const tbody = document.getElementById('escorts-tbody');
+                        data.escorts.forEach(escort => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${escort.id}</td>
+                                <td>${escort.name}</td>
+                                <td>${escort.type}</td>
+                                <td>${escort.is_online ? 'Sim' : 'Não'}</td>
+                                <td>${escort.views}</td>
+                                <td>${escort.latitude}, ${escort.longitude}</td>
+                                <td>${escort.username}</td>
+                                <td>${escort.public_favorites}</td>
+                                <td>
+                                    <a href="edit_escort.php?id=${escort.id}" class="btn" aria-label="Editar perfil ${escort.name}">Editar</a>
+                                    <button onclick="toggleFavorite(${escort.id}, this)" class="btn" aria-label="Favoritar perfil ${escort.name}">Favoritar<span class="action-feedback" id="favorite-feedback-${escort.id}"></span></button>
+                                    <button onclick="toggleHighlight(${escort.id}, this)" class="btn" aria-label="Destacar perfil ${escort.name}">Destacar<span class="action-feedback" id="highlight-feedback-${escort.id}"></span></button>
+                                    <button onclick="showDeletePopup(${escort.id})" class="btn" aria-label="Excluir perfil ${escort.name}">Excluir</button>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                        if (data.escorts.length < itemsPerPage) {
+                            document.getElementById('load-more-btn')?.remove();
+                        }
                     } else {
-                        resultDiv.className = 'error';
-                        resultDiv.textContent = `Erro na importação: ${data.message}`;
+                        Toastify({
+                            text: "Erro ao carregar mais perfis: " + data.message,
+                            duration: 3000,
+                            style: { background: "#DC3545" }
+                        }).showToast();
                     }
                 })
                 .catch(error => {
-                    resultDiv.style.display = 'block';
-                    resultDiv.className = 'error';
-                    resultDiv.textContent = 'Erro ao processar o arquivo CSV: ' + error.message;
+                    Toastify({
+                        text: "Erro ao carregar mais perfis: " + error.message,
+                        duration: 3000,
+                        style: { background: "#DC3545" }
+                    }).showToast();
                 });
         }
 
@@ -590,6 +711,21 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 data: { labels: ['Agendamentos'], datasets: [{ data: [<?php echo $stats['pending_schedules']; ?>], backgroundColor: ['#1877F2'] }] },
                 options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
+
+            // Lazy loading observer
+            const observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) {
+                    loadMoreEscorts();
+                }
+            }, { rootMargin: '100px' });
+
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.id = 'load-more-btn';
+            loadMoreBtn.className = 'btn';
+            loadMoreBtn.textContent = 'Carregar Mais';
+            loadMoreBtn.onclick = loadMoreEscorts;
+            document.querySelector('#escorts').appendChild(loadMoreBtn);
+            observer.observe(loadMoreBtn);
         });
     </script>
 </body>

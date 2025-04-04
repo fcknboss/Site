@@ -8,7 +8,7 @@
 
 /* Estilo geral do body */
 body {
-    background: #F5F6F5; /* Cinza claro neutro */
+    background: #F5F6F5;
     color: #1C2526;
     font-size: 16px;
     line-height: 1.6;
@@ -23,7 +23,7 @@ body {
 
 /* Cabeçalho (top-bar do header.php) */
 .top-bar {
-    background: #1877F2; /* Azul Facebook */
+    background: #1877F2;
     padding: 15px 25px;
     display: flex;
     justify-content: space-between;
@@ -41,6 +41,39 @@ body {
     font-weight: 600;
 }
 
+.top-center {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.search-form {
+    display: flex;
+    align-items: center;
+    max-width: 500px;
+    width: 100%;
+}
+
+.search-form input[type="text"] {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px 0 0 6px;
+    font-size: 14px;
+    width: 100%;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.search-form input[type="text"]:focus {
+    border-color: #1877F2;
+    box-shadow: 0 0 5px rgba(24, 119, 242, 0.3);
+    outline: none;
+}
+
+.search-form .btn {
+    border-radius: 0 6px 6px 0;
+    margin-left: -1px;
+}
+
 .top-right a {
     color: #fff;
     text-decoration: none;
@@ -50,7 +83,7 @@ body {
 }
 
 .top-right a:hover {
-    color: #E9ECEF; /* Cinza claro no hover */
+    color: #E9ECEF;
     transform: scale(1.05);
 }
 
@@ -63,7 +96,7 @@ body {
 }
 
 .main-content h3 {
-    color: #1877F2; /* Azul Facebook */
+    color: #1877F2;
     margin-bottom: 25px;
     font-size: 1.75em;
     font-weight: 700;
@@ -93,7 +126,7 @@ body {
 }
 
 .widget h4 {
-    color: #1877F2; /* Azul Facebook */
+    color: #1877F2;
     margin-bottom: 12px;
     font-size: 1.2em;
     font-weight: 600;
@@ -112,19 +145,25 @@ body {
 
 /* Seção de escorts */
 #escorts h2 {
-    color: #1877F2; /* Azul Facebook */
+    color: #1877F2;
     margin-bottom: 25px;
     font-size: 1.75em;
     font-weight: 700;
 }
 
 /* Formulários de exportação e filtros */
+.action-bar {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
 .export-form, .filter-form {
     display: flex;
     gap: 15px;
     flex-wrap: wrap;
     align-items: center;
-    margin-bottom: 15px;
     background: #f9f9f9;
     padding: 15px;
     border-radius: 8px;
@@ -143,14 +182,14 @@ body {
 }
 
 .filter-form input[type="text"]:focus, .filter-form input[type="number"]:focus, .filter-form select:focus {
-    border-color: #1877F2; /* Azul Facebook */
+    border-color: #1877F2;
     box-shadow: 0 0 5px rgba(24, 119, 242, 0.3);
     outline: none;
 }
 
 /* Botões */
 .btn {
-    background: #1877F2; /* Azul Facebook */
+    background: #1877F2;
     color: #fff;
     padding: 10px 20px;
     border: none;
@@ -162,7 +201,7 @@ body {
 }
 
 .btn:hover {
-    background: #166FE5; /* Azul mais escuro */
+    background: #166FE5;
     transform: translateY(-2px);
 }
 
@@ -184,13 +223,37 @@ body {
 }
 
 #import-result.success {
-    background: #28A745; /* Verde mantido */
+    background: #28A745;
     color: #fff;
 }
 
 #import-result.error {
-    background: #DC3545; /* Vermelho padrão */
+    background: #DC3545;
     color: #fff;
+}
+
+#import-result.loading {
+    background: #f9f9f9;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Spinner */
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(24, 119, 242, 0.3);
+    border-radius: 50%;
+    border-top-color: #1877F2;
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* Tabela de administração */
@@ -212,7 +275,7 @@ body {
 }
 
 .admin-table th {
-    background: #1877F2; /* Azul Facebook */
+    background: #1877F2;
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -240,7 +303,7 @@ body {
 }
 
 .admin-table tr:hover {
-    background: #E9ECEF; /* Cinza claro no hover */
+    background: #E9ECEF;
 }
 
 .admin-table td img {
@@ -260,7 +323,7 @@ body {
 
 .pagination a {
     padding: 10px 15px;
-    background: #1877F2; /* Azul Facebook */
+    background: #1877F2;
     color: #fff;
     text-decoration: none;
     border-radius: 6px;
@@ -269,13 +332,13 @@ body {
 }
 
 .pagination a:hover {
-    background: #166FE5; /* Azul mais escuro */
+    background: #166FE5;
     transform: translateY(-2px);
 }
 
 .pagination a.active {
-    background: #E9ECEF; /* Cinza claro */
-    color: #1877F2; /* Azul Facebook */
+    background: #E9ECEF;
+    color: #1877F2;
     font-weight: 700;
     transform: none;
 }
@@ -311,7 +374,7 @@ body {
 }
 
 .confirm-content h3 {
-    color: #1877F2; /* Azul Facebook */
+    color: #1877F2;
     margin-bottom: 20px;
     font-size: 1.5em;
     font-weight: 700;
@@ -335,7 +398,7 @@ body {
 .action-feedback {
     display: inline-block;
     margin-left: 8px;
-    color: #28A745; /* Verde mantido */
+    color: #28A745;
     font-weight: 600;
     transition: opacity 0.5s ease;
 }
@@ -349,6 +412,12 @@ body {
 @keyframes popupIn {
     from { transform: scale(0.9); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
+}
+
+/* Load more button */
+#load-more-btn {
+    display: block;
+    margin: 20px auto;
 }
 
 /* Responsividade */
@@ -366,7 +435,7 @@ body {
         padding: 15px;
     }
 
-    .export-form, .filter-form {
+    .action-bar, .export-form, .filter-form {
         flex-direction: column;
         align-items: stretch;
         padding: 10px;
@@ -401,6 +470,26 @@ body {
     .top-left h2 {
         font-size: 1.2em;
         margin-bottom: 10px;
+    }
+
+    .top-center {
+        width: 100%;
+        margin: 10px 0;
+    }
+
+    .search-form {
+        flex-direction: column;
+    }
+
+    .search-form input[type="text"] {
+        border-radius: 6px;
+    }
+
+    .search-form .btn {
+        border-radius: 6px;
+        width: 100%;
+        margin-left: 0;
+        margin-top: 10px;
     }
 
     .top-right a {
