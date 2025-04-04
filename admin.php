@@ -26,14 +26,12 @@ function checkDatabaseIntegrity($conn) {
     $errors = [];
 
     foreach ($required_tables as $table => $columns) {
-        // Verifica se a tabela existe
         $result = $conn->query("SHOW TABLES LIKE '$table'");
         if ($result->num_rows == 0) {
             $errors[] = "Tabela '$table' não existe.";
             continue;
         }
 
-        // Verifica as colunas
         $result = $conn->query("SHOW COLUMNS FROM $table");
         $existing_columns = [];
         while ($row = $result->fetch_assoc()) {
@@ -54,15 +52,13 @@ function checkDatabaseIntegrity($conn) {
 $db_check = checkDatabaseIntegrity($conn);
 if ($db_check !== true) {
     echo "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><title>Erro no Banco de Dados</title>";
-    echo "<style>body { font-family: Arial, sans-serif; background: #F6ECB2; color: #333; padding: 20px; }";
-    echo ".error-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 0 auto; }";
-    echo "h1 { color: #E95B95; } ul { list-style: none; padding: 0; } li { margin: 10px 0; }</style></head>";
-    echo "<body><div class='error-box'><h1>Erro no Banco de Dados</h1><p>O banco de dados está incompleto. Corrija os seguintes problemas:</p>";
+    echo "<link rel='stylesheet' href='style.css?v=" . time() . "'>";
+    echo "</head><body><div class='container'><div class='main-content error-box'><h1>Erro no Banco de Dados</h1><p>O banco de dados está incompleto. Corrija os seguintes problemas:</p>";
     echo "<ul>";
     foreach ($db_check as $error) {
         echo "<li>$error</li>";
     }
-    echo "</ul><p>Por favor, crie as tabelas e colunas necessárias no phpMyAdmin e tente novamente.</p></div></body></html>";
+    echo "</ul><p>Por favor, crie as tabelas e colunas necessárias no phpMyAdmin e tente novamente.</p></div></div></body></html>";
     exit;
 }
 
@@ -220,20 +216,6 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
     <title>Painel de Administração - Eskort</title>
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .dashboard-widgets { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
-        .widget { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); flex: 1; min-width: 200px; cursor: pointer; transition: transform 0.2s; position: relative; }
-        .widget:hover { transform: scale(1.05); }
-        .widget canvas { max-height: 100px; }
-        .admin-table th[aria-sort] { cursor: pointer; }
-        #import-result { margin-top: 10px; padding: 10px; border-radius: 5px; display: none; }
-        #import-result.success { background-color: #28A745; color: white; }
-        #import-result.error { background-color: #E95B95; color: white; }
-        .confirm-popup.active { display: flex; }
-        .confirm-buttons button:disabled { opacity: 0.5; cursor: not-allowed; }
-        #delete-feedback { display: none; margin-top: 10px; }
-        .action-feedback { display: inline-block; margin-left: 5px; color: #28A745; }
-    </style>
 </head>
 <body>
     <?php include 'header.php'; ?>
@@ -272,7 +254,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
 
             <section id="escorts">
                 <h2>Gerenciar Perfis</h2>
-                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <div class="action-bar">
                     <form class="export-form" action="export_escorts.php" method="POST">
                         <label><input type="checkbox" name="fields[]" value="name" checked> Nome</label>
                         <label><input type="checkbox" name="fields[]" value="type"> Tipo</label>
@@ -290,7 +272,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         </select>
                         <button type="submit" class="btn" aria-label="Exportar perfis como PDF">Exportar PDF</button>
                     </form>
-                    <input type="file" id="import-csv" accept=".csv" onchange="importCSV(this)" style="margin: 10px 0;" aria-label="Importar CSV de perfis">
+                    <input type="file" id="import-csv" accept=".csv" onchange="importCSV(this)" aria-label="Importar CSV de perfis">
                     <a href="edit_escort.php" class="btn" aria-label="Adicionar novo perfil">Adicionar Perfil</a>
                 </div>
                 <div id="import-result"></div>
@@ -360,7 +342,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                     <p>Nenhuma foto pendente para moderação.</p>
                 <?php else: ?>
                     <form method="POST">
-                        <table class="admin-table photo-moderation" role="grid">
+                        <table class="admin-table" role="grid">
                             <thead>
                                 <tr>
                                     <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()" aria-label="Selecionar todas as fotos"></th>
@@ -444,7 +426,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         }, 1000);
                     } else {
                         feedback.textContent = 'Erro: ' + data.message;
-                        feedback.style.color = '#E95B95';
+                        feedback.style.color = '#DC3545';
                         yesBtn.disabled = false;
                         cancelBtn.disabled = false;
                         isDeleting = false;
@@ -452,7 +434,7 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                 })
                 .catch(error => {
                     feedback.textContent = 'Erro ao excluir: ' + error.message;
-                    feedback.style.color = '#E95B95';
+                    feedback.style.color = '#DC3545';
                     yesBtn.disabled = false;
                     cancelBtn.disabled = false;
                     isDeleting = false;
@@ -483,12 +465,12 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         setTimeout(() => location.reload(), 1000);
                     } else {
                         feedback.textContent = 'Erro: ' + data.message;
-                        feedback.style.color = '#E95B95';
+                        feedback.style.color = '#DC3545';
                     }
                 })
                 .catch(error => {
                     feedback.textContent = 'Erro: ' + error.message;
-                    feedback.style.color = '#E95B95';
+                    feedback.style.color = '#DC3545';
                 });
         }
 
@@ -508,12 +490,12 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
                         setTimeout(() => location.reload(), 1000);
                     } else {
                         feedback.textContent = 'Erro: ' + data.message;
-                        feedback.style.color = '#E95B95';
+                        feedback.style.color = '#DC3545';
                     }
                 })
                 .catch(error => {
                     feedback.textContent = 'Erro: ' + error.message;
-                    feedback.style.color = '#E95B95';
+                    feedback.style.color = '#DC3545';
                 });
         }
 
@@ -583,27 +565,27 @@ if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
         document.addEventListener('DOMContentLoaded', () => {
             const acompanhantesChart = new Chart(document.getElementById('acompanhantes-chart'), {
                 type: 'doughnut',
-                data: { labels: ['Acompanhantes'], datasets: [{ data: [<?php echo $stats['acompanhantes']; ?>], backgroundColor: ['#E95B95'] }] },
+                data: { labels: ['Acompanhantes'], datasets: [{ data: [<?php echo $stats['acompanhantes']; ?>], backgroundColor: ['#1877F2'] }] },
                 options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const pornstarsChart = new Chart(document.getElementById('pornstars-chart'), {
                 type: 'doughnut',
-                data: { labels: ['Pornstars'], datasets: [{ data: [<?php echo $stats['pornstars']; ?>], backgroundColor: ['#E95B95'] }] },
+                data: { labels: ['Pornstars'], datasets: [{ data: [<?php echo $stats['pornstars']; ?>], backgroundColor: ['#1877F2'] }] },
                 options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const viewsChart = new Chart(document.getElementById('views-chart'), {
                 type: 'doughnut',
-                data: { labels: ['Visualizações'], datasets: [{ data: [<?php echo $stats['total_views']; ?>], backgroundColor: ['#E95B95'] }] },
+                data: { labels: ['Visualizações'], datasets: [{ data: [<?php echo $stats['total_views']; ?>], backgroundColor: ['#1877F2'] }] },
                 options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const favoritesChart = new Chart(document.getElementById('favorites-chart'), {
                 type: 'doughnut',
-                data: { labels: ['Favoritos'], datasets: [{ data: [<?php echo $stats['favorites']; ?>], backgroundColor: ['#E95B95'] }] },
+                data: { labels: ['Favoritos'], datasets: [{ data: [<?php echo $stats['favorites']; ?>], backgroundColor: ['#1877F2'] }] },
                 options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
             const schedulesChart = new Chart(document.getElementById('schedules-chart'), {
                 type: 'doughnut',
-                data: { labels: ['Agendamentos'], datasets: [{ data: [<?php echo $stats['pending_schedules']; ?>], backgroundColor: ['#E95B95'] }] },
+                data: { labels: ['Agendamentos'], datasets: [{ data: [<?php echo $stats['pending_schedules']; ?>], backgroundColor: ['#1877F2'] }] },
                 options: { plugins: { legend: { display: false } }, cutout: '70%' }
             });
         });
