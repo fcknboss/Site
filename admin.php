@@ -10,7 +10,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 $conn = getDBConnection();
 
 $items_per_page = 10;
-$page_escorts = isset($_GET['page_escorts']) ? (int)$_GET['page_escorts'] : 1;
+$page_escorts = isset($_GET['page_escorts']) ? max(1, (int)$_GET['page_escorts']) : 1;
 $offset_escorts = ($page_escorts - 1) * $items_per_page;
 
 $filter_type = isset($_GET['filter_type']) ? trim($_GET['filter_type']) : '';
@@ -50,11 +50,18 @@ if (!empty($filter_tag)) {
 }
 $where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
-$total_escorts = $conn->query("SELECT COUNT(*) as total FROM escorts e $where_clause" . ($types ? " WITH (" . implode(',', $params) . ")" : ""))->fetch_assoc()['total'];
+$total_query = "SELECT COUNT(*) as total FROM escorts e $where_clause";
+$stmt_total = $conn->prepare($total_query);
+if ($types) {
+    $stmt_total->bind_param($types, ...$params);
+}
+$stmt_total->execute();
+$total_escorts = $stmt_total->get_result()->fetch_assoc()['total'];
 $total_pages_escorts = ceil($total_escorts / $items_per_page);
 
 function getEscorts($conn, $offset, $limit, $where_clause, $types, $params) {
-    $query = "SELECT e.id, e.name, e.type, e.is_online, e.views, e.latitude, e.longitude, u.username 
+    $query = "SELECT e.id, e.name, e.type, e.is_online, e.views, e.latitude, e.longitude, u.username, 
+                     (SELECT COUNT(*) FROM favorites f WHERE f.escort_id = e.id AND f.is_public = 1) as public_favorites 
               FROM escorts e 
               JOIN users u ON e.user_id = u.id 
               $where_clause 
@@ -77,7 +84,8 @@ $stats = $conn->query("SELECT
     (SELECT COUNT(*) FROM escorts WHERE type = 'criadora') as pornstars,
     (SELECT SUM(views) FROM escorts) as total_views,
     (SELECT COUNT(*) FROM favorites WHERE admin_id = " . (int)$_SESSION['user_id'] . ") as favorites,
-    (SELECT COUNT(*) FROM messages WHERE receiver_id = " . (int)$_SESSION['user_id'] . " AND is_read = 0) as unread_messages")->fetch_assoc();
+    (SELECT COUNT(*) FROM messages WHERE receiver_id = " . (int)$_SESSION['user_id'] . " AND is_read = 0) as unread_messages,
+    (SELECT COUNT(*) FROM schedules WHERE status = 'pending') as pending_schedules")->fetch_assoc();
 
 if (!empty($filter_search)) {
     $stmt = $conn->prepare("INSERT INTO search_log (admin_id, query) VALUES (?, ?)");
@@ -87,12 +95,35 @@ if (!empty($filter_search)) {
 
 $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fetch_all(MYSQLI_ASSOC);
 
-$photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.status 
-                        FROM photos p 
-                        JOIN escorts e ON p.escort_id = e.id 
-                        LEFT JOIN photo_moderation pm ON p.id = pm.photo_id 
-                        ORDER BY p.id DESC 
-                        LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+// Verifica se a tabela photo_moderation existe
+$photo_moderation_exists = $conn->query("SHOW TABLES LIKE 'photo_moderation'")->num_rows > 0;
+$photos = [];
+if ($photo_moderation_exists) {
+    $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.status 
+                            FROM photos p 
+                            JOIN escorts e ON p.escort_id = e.id 
+                            LEFT JOIN photo_moderation pm ON p.id = pm.photo_id 
+                            WHERE pm.status IS NULL OR pm.status = 'pending' 
+                            ORDER BY p.id DESC 
+                            LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+}
+
+if (isset($_POST['moderate_photos']) && $photo_moderation_exists) {
+    $photo_ids = isset($_POST['photo_ids']) ? $_POST['photo_ids'] : [];
+    $action = in_array($_POST['action'], ['approve', 'reject']) ? $_POST['action'] : 'pending';
+    if (!empty($photo_ids)) {
+        $placeholders = implode(',', array_fill(0, count($photo_ids), '?'));
+        $stmt = $conn->prepare("INSERT INTO photo_moderation (photo_id, status) 
+                                VALUES (?, ?) 
+                                ON DUPLICATE KEY UPDATE status = VALUES(status), moderated_at = NOW()");
+        foreach ($photo_ids as $photo_id) {
+            $stmt->bind_param("is", $photo_id, $action);
+            $stmt->execute();
+        }
+    }
+    header("Location: admin.php#photo-moderation");
+    exit;
+}
 ?>
 
 <!DOCTYPE html>
@@ -105,94 +136,97 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .dashboard-widgets { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
-        .widget { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); flex: 1; min-width: 200px; }
+        .widget { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); flex: 1; min-width: 200px; cursor: pointer; transition: transform 0.2s; position: relative; }
+        .widget:hover { transform: scale(1.05); }
+        .widget canvas { max-height: 100px; }
+        .admin-table th[aria-sort] { cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="top-bar">
-        <div class="top-left">
-            <h2>Eskort Admin</h2>
-        </div>
-        <div class="top-right">
-            <a href="index.php">Home</a>
-            <a href="report.php">Relatórios</a>
-            <a href="manage_categories.php">Categorias</a>
-            <a href="view_logs.php">Logs</a>
-            <a href="messages.php">Mensagens (<?php echo $stats['unread_messages']; ?>)</a>
-            <a href="logout.php">Sair</a>
-        </div>
-    </div>
+    <?php include 'header.php'; ?>
 
     <div class="container">
         <div class="main-content">
             <h3>Bem-vindo, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h3>
 
             <section class="dashboard-widgets">
-                <div class="widget">
+                <div class="widget" onclick="location.href='#escorts';">
                     <h4>Acompanhantes</h4>
                     <p><?php echo $stats['acompanhantes']; ?></p>
+                    <canvas id="acompanhantes-chart"></canvas>
                 </div>
-                <div class="widget">
+                <div class="widget" onclick="location.href='#escorts';">
                     <h4>Pornstars</h4>
                     <p><?php echo $stats['pornstars']; ?></p>
+                    <canvas id="pornstars-chart"></canvas>
                 </div>
-                <div class="widget">
+                <div class="widget" onclick="location.href='report.php';">
                     <h4>Total de Visualizações</h4>
                     <p><?php echo $stats['total_views']; ?></p>
+                    <canvas id="views-chart"></canvas>
                 </div>
-                <div class="widget">
+                <div class="widget" onclick="location.href='favorites.php';">
                     <h4>Favoritos</h4>
                     <p><?php echo $stats['favorites']; ?></p>
+                    <canvas id="favorites-chart"></canvas>
+                </div>
+                <div class="widget" onclick="location.href='schedule.php';">
+                    <h4>Agendamentos Pendentes</h4>
+                    <p><?php echo $stats['pending_schedules']; ?></p>
+                    <canvas id="schedules-chart"></canvas>
                 </div>
             </section>
 
             <section id="escorts">
                 <h2>Gerenciar Perfis</h2>
-                <form class="export-form" action="export_escorts.php" method="POST">
-                    <label><input type="checkbox" name="fields[]" value="name" checked> Nome</label>
-                    <label><input type="checkbox" name="fields[]" value="type"> Tipo</label>
-                    <label><input type="checkbox" name="fields[]" value="views"> Views</label>
-                    <button type="submit" class="export-btn">Exportar CSV</button>
-                </form>
-                <form class="export-form" action="export_pdf.php" method="POST">
-                    <select name="export_category">
-                        <option value="0">Todas as Categorias</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>" <?php echo $export_category == $cat['id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cat['name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <button type="submit" class="export-btn">Exportar PDF</button>
-                </form>
-                <input type="file" id="import-csv" accept=".csv" onchange="importCSV(this)" style="margin: 10px 0;">
-                <a href="edit_escort.php" class="add-btn">Adicionar Perfil</a>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <form class="export-form" action="export_escorts.php" method="POST">
+                        <label><input type="checkbox" name="fields[]" value="name" checked> Nome</label>
+                        <label><input type="checkbox" name="fields[]" value="type"> Tipo</label>
+                        <label><input type="checkbox" name="fields[]" value="views"> Views</label>
+                        <button type="submit" class="btn" aria-label="Exportar perfis como CSV">Exportar CSV</button>
+                    </form>
+                    <form class="export-form" action="export_pdf.php" method="POST">
+                        <select name="export_category" aria-label="Selecionar categoria para exportação">
+                            <option value="0">Todas as Categorias</option>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?php echo $cat['id']; ?>" <?php echo $export_category == $cat['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($cat['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="btn" aria-label="Exportar perfis como PDF">Exportar PDF</button>
+                    </form>
+                    <input type="file" id="import-csv" accept=".csv" onchange="importCSV(this)" style="margin: 10px 0;" aria-label="Importar CSV de perfis">
+                    <a href="edit_escort.php" class="btn" aria-label="Adicionar novo perfil">Adicionar Perfil</a>
+                </div>
                 <form class="filter-form" method="GET">
-                    <input type="text" name="filter_search" value="<?php echo htmlspecialchars($filter_search); ?>" placeholder="Buscar por nome">
-                    <select name="filter_type">
+                    <input type="text" name="filter_search" value="<?php echo htmlspecialchars($filter_search); ?>" placeholder="Buscar por nome" aria-label="Buscar por nome">
+                    <select name="filter_type" aria-label="Filtrar por tipo">
                         <option value="">Todos os Tipos</option>
                         <option value="acompanhante" <?php echo $filter_type === 'acompanhante' ? 'selected' : ''; ?>>Acompanhante</option>
                         <option value="criadora" <?php echo $filter_type === 'criadora' ? 'selected' : ''; ?>>Pornstar</option>
                     </select>
-                    <select name="filter_online">
+                    <select name="filter_online" aria-label="Filtrar por status online">
                         <option value="-1">Todos Status</option>
                         <option value="1" <?php echo $filter_online === 1 ? 'selected' : ''; ?>>Online</option>
                         <option value="0" <?php echo $filter_online === 0 ? 'selected' : ''; ?>>Offline</option>
                     </select>
-                    <input type="number" name="filter_views_min" value="<?php echo $filter_views_min; ?>" placeholder="Views mínimas">
-                    <input type="text" name="filter_tag" value="<?php echo htmlspecialchars($filter_tag); ?>" placeholder="Tag (ex: loira)">
-                    <button type="submit" class="search-btn">Filtrar</button>
+                    <input type="number" name="filter_views_min" value="<?php echo $filter_views_min; ?>" placeholder="Views mínimas" aria-label="Filtrar por visualizações mínimas">
+                    <input type="text" name="filter_tag" value="<?php echo htmlspecialchars($filter_tag); ?>" placeholder="Tag (ex: loira)" aria-label="Filtrar por tag">
+                    <button type="submit" class="btn" aria-label="Aplicar filtros">Filtrar</button>
                 </form>
-                <table class="admin-table">
+                <table class="admin-table" role="grid">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Tipo</th>
-                            <th>Online</th>
-                            <th>Views</th>
-                            <th>Lat/Long</th>
-                            <th>Usuário</th>
+                            <th aria-sort="none" onclick="sortTable(0)">ID</th>
+                            <th aria-sort="none" onclick="sortTable(1)">Nome</th>
+                            <th aria-sort="none" onclick="sortTable(2)">Tipo</th>
+                            <th aria-sort="none" onclick="sortTable(3)">Online</th>
+                            <th aria-sort="none" onclick="sortTable(4)">Views</th>
+                            <th aria-sort="none" onclick="sortTable(5)">Lat/Long</th>
+                            <th aria-sort="none" onclick="sortTable(6)">Usuário</th>
+                            <th aria-sort="none" onclick="sortTable(7)">Favoritos Públicos</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -206,11 +240,12 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
                                 <td><?php echo $escort['views']; ?></td>
                                 <td><?php echo $escort['latitude'] . ', ' . $escort['longitude']; ?></td>
                                 <td><?php echo htmlspecialchars($escort['username']); ?></td>
+                                <td><?php echo $escort['public_favorites']; ?></td>
                                 <td>
-                                    <a href="edit_escort.php?id=<?php echo $escort['id']; ?>" class="edit-btn">Editar</a>
-                                    <button onclick="toggleFavorite(<?php echo $escort['id']; ?>)" class="favorite-btn">Favoritar</button>
-                                    <button onclick="toggleHighlight(<?php echo $escort['id']; ?>)" class="highlight-btn">Destacar</button>
-                                    <button onclick="showDeletePopup(<?php echo $escort['id']; ?>)" class="delete-btn">Excluir</button>
+                                    <a href="edit_escort.php?id=<?php echo $escort['id']; ?>" class="btn" aria-label="Editar perfil <?php echo htmlspecialchars($escort['name']); ?>">Editar</a>
+                                    <button onclick="toggleFavorite(<?php echo $escort['id']; ?>)" class="btn" aria-label="Favoritar perfil <?php echo htmlspecialchars($escort['name']); ?>">Favoritar</button>
+                                    <button onclick="toggleHighlight(<?php echo $escort['id']; ?>)" class="btn" aria-label="Destacar perfil <?php echo htmlspecialchars($escort['name']); ?>">Destacar</button>
+                                    <button onclick="showDeletePopup(<?php echo $escort['id']; ?>)" class="btn" aria-label="Excluir perfil <?php echo htmlspecialchars($escort['name']); ?>">Excluir</button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -225,35 +260,41 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
 
             <section id="photo-moderation">
                 <h2>Moderação de Fotos</h2>
-                <form method="POST">
-                    <table class="admin-table photo-moderation">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
-                                <th>ID</th>
-                                <th>Foto</th>
-                                <th>Perfil</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($photos as $photo): ?>
+                <?php if (!$photo_moderation_exists): ?>
+                    <p class="error">A tabela de moderação de fotos não está disponível. Crie a tabela 'photo_moderation' no banco de dados.</p>
+                <?php elseif (empty($photos)): ?>
+                    <p>Nenhuma foto pendente para moderação.</p>
+                <?php else: ?>
+                    <form method="POST">
+                        <table class="admin-table photo-moderation" role="grid">
+                            <thead>
                                 <tr>
-                                    <td><input type="checkbox" name="photo_ids[]" value="<?php echo $photo['id']; ?>"></td>
-                                    <td><?php echo $photo['id']; ?></td>
-                                    <td><img src="<?php echo htmlspecialchars($photo['photo_path']); ?>" alt="Foto"></td>
-                                    <td><?php echo htmlspecialchars($photo['escort_name']); ?></td>
-                                    <td><?php echo $photo['status'] ?? 'Pendente'; ?></td>
+                                    <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()" aria-label="Selecionar todas as fotos"></th>
+                                    <th>ID</th>
+                                    <th>Foto</th>
+                                    <th>Perfil</th>
+                                    <th>Status</th>
                                 </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <select name="action">
-                        <option value="approve">Aprovar</option>
-                        <option value="reject">Rejeitar</option>
-                    </select>
-                    <button type="submit" name="moderate_photos" class="load-more">Aplicar</button>
-                </form>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($photos as $photo): ?>
+                                    <tr>
+                                        <td><input type="checkbox" name="photo_ids[]" value="<?php echo $photo['id']; ?>" aria-label="Selecionar foto ID <?php echo $photo['id']; ?>"></td>
+                                        <td><?php echo $photo['id']; ?></td>
+                                        <td><img src="<?php echo htmlspecialchars($photo['photo_path']); ?>" alt="Foto de <?php echo htmlspecialchars($photo['escort_name']); ?>" style="max-width: 100px;"></td>
+                                        <td><?php echo htmlspecialchars($photo['escort_name']); ?></td>
+                                        <td><?php echo $photo['status'] ?? 'Pendente'; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <select name="action" aria-label="Ação de moderação">
+                            <option value="approve">Aprovar</option>
+                            <option value="reject">Rejeitar</option>
+                        </select>
+                        <button type="submit" name="moderate_photos" class="btn" aria-label="Aplicar ação de moderação">Aplicar</button>
+                    </form>
+                <?php endif; ?>
             </section>
         </div>
     </div>
@@ -263,13 +304,15 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
             <h3>Confirmar Exclusão</h3>
             <p>Tem certeza que deseja excluir este perfil?</p>
             <div class="confirm-buttons">
-                <button id="delete-yes">Sim</button>
-                <button onclick="closeDeletePopup()">Cancelar</button>
+                <button id="delete-yes" class="btn">Sim</button>
+                <button onclick="closeDeletePopup()" class="btn">Cancelar</button>
             </div>
         </div>
     </div>
 
     <script>
+        let sortDirection = {};
+
         function showDeletePopup(id) {
             const popup = document.getElementById('delete-popup');
             popup.classList.add('active');
@@ -300,13 +343,22 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
             })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === 'success') alert(data.message);
+                    if (data.status === 'success') location.reload();
                     else alert(data.message);
                 });
         }
 
         function toggleHighlight(id) {
-            alert('Funcionalidade de destaque manual será implementada no futuro.');
+            fetch('toggle_highlight.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `escort_id=${id}`
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') location.reload();
+                    else alert(data.message);
+                });
         }
 
         function toggleSelectAll() {
@@ -314,6 +366,58 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
             const selectAll = document.getElementById('select-all');
             checkboxes.forEach(cb => cb.checked = selectAll.checked);
         }
+
+        function sortTable(columnIndex) {
+            const table = document.querySelector('.admin-table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const th = table.querySelectorAll('th')[columnIndex];
+            const direction = sortDirection[columnIndex] === 'asc' ? 'desc' : 'asc';
+            sortDirection[columnIndex] = direction;
+
+            rows.sort((a, b) => {
+                const aValue = a.cells[columnIndex].textContent.trim();
+                const bValue = b.cells[columnIndex].textContent.trim();
+                if (!isNaN(aValue) && !isNaN(bValue)) {
+                    return direction === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+                return direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            });
+
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+
+            table.querySelectorAll('th').forEach(th => th.setAttribute('aria-sort', 'none'));
+            th.setAttribute('aria-sort', direction);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const acompanhantesChart = new Chart(document.getElementById('acompanhantes-chart'), {
+                type: 'doughnut',
+                data: { labels: ['Acompanhantes'], datasets: [{ data: [<?php echo $stats['acompanhantes']; ?>], backgroundColor: ['#E95B95'] }] },
+                options: { legend: { display: false }, cutoutPercentage: 70 }
+            });
+            const pornstarsChart = new Chart(document.getElementById('pornstars-chart'), {
+                type: 'doughnut',
+                data: { labels: ['Pornstars'], datasets: [{ data: [<?php echo $stats['pornstars']; ?>], backgroundColor: ['#E95B95'] }] },
+                options: { legend: { display: false }, cutoutPercentage: 70 }
+            });
+            const viewsChart = new Chart(document.getElementById('views-chart'), {
+                type: 'doughnut',
+                data: { labels: ['Visualizações'], datasets: [{ data: [<?php echo $stats['total_views']; ?>], backgroundColor: ['#E95B95'] }] },
+                options: { legend: { display: false }, cutoutPercentage: 70 }
+            });
+            const favoritesChart = new Chart(document.getElementById('favorites-chart'), {
+                type: 'doughnut',
+                data: { labels: ['Favoritos'], datasets: [{ data: [<?php echo $stats['favorites']; ?>], backgroundColor: ['#E95B95'] }] },
+                options: { legend: { display: false }, cutoutPercentage: 70 }
+            });
+            const schedulesChart = new Chart(document.getElementById('schedules-chart'), {
+                type: 'doughnut',
+                data: { labels: ['Agendamentos'], datasets: [{ data: [<?php echo $stats['pending_schedules']; ?>], backgroundColor: ['#E95B95'] }] },
+                options: { legend: { display: false }, cutoutPercentage: 70 }
+            });
+        });
     </script>
 </body>
 </html>
