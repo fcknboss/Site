@@ -15,7 +15,7 @@ $error = '';
 $suggested_tags = [];
 
 if ($id > 0) {
-    $stmt = $conn->prepare("SELECT e.*, u.username FROM escorts e JOIN users u ON e.user_id = u.id WHERE e.id = ?");
+    $stmt = $conn->prepare("SELECT e.*, u.username, u.email FROM escorts e JOIN users u ON e.user_id = u.id WHERE e.id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $escort = $stmt->get_result()->fetch_assoc();
@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $video_name = time() . '_' . basename($_FILES["video"]["name"]);
             $video_file = $target_dir . $video_name;
             $video_type = mime_content_type($_FILES["video"]["tmp_name"]);
-            if (in_array($video_type, ['video/mp4', 'video/webm']) && $_FILES["video"]["size"] <= 50 * 1024 * 1024) { // Máx 50MB
+            if (in_array($video_type, ['video/mp4', 'video/webm']) && $_FILES["video"]["size"] <= 50 * 1024 * 1024) {
                 if (move_uploaded_file($_FILES["video"]["tmp_name"], $video_file)) {
                     $data['video_url'] = $video_file;
                 } else {
@@ -142,6 +142,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt_log = $conn->prepare("INSERT INTO edit_log (admin_id, escort_id, action) VALUES (?, ?, ?)");
                 $stmt_log->bind_param("iis", $admin_id, $escort_id, $action);
                 $stmt_log->execute();
+
+                // Enviar email de notificação
+                $to = $escort ? $escort['email'] : $conn->query("SELECT email FROM users WHERE id = $user_id")->fetch_assoc()['email'];
+                $subject = $id > 0 ? "Perfil Atualizado - Eskort" : "Novo Perfil Criado - Eskort";
+                $message = "Olá,\n\nSeu perfil no Eskort foi " . ($id > 0 ? "atualizado" : "criado") . ".\nNome: {$data['name']}\nTipo: {$data['type']}\nDisponibilidade: {$data['availability']}\n\nAcesse o painel para mais detalhes.\n\nAtenciosamente,\nEquipe Eskort";
+                $headers = "From: no-reply@eskort.com";
+                mail($to, $subject, $message, $headers);
 
                 header("Location: admin.php#escorts");
                 exit;

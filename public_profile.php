@@ -4,7 +4,7 @@ require_once 'config.php';
 $conn = getDBConnection();
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$stmt = $conn->prepare("SELECT e.name, e.profile_photo, e.description, e.type, e.views, e.tags, e.video_url 
+$stmt = $conn->prepare("SELECT e.name, e.profile_photo, e.description, e.type, e.views, e.tags, e.video_url, e.latitude, e.longitude 
                         FROM escorts e 
                         WHERE e.id = ?");
 $stmt->bind_param("i", $id);
@@ -16,7 +16,7 @@ if (!$escort) {
 }
 
 $conn->query("UPDATE escorts SET views = views + 1 WHERE id = $id");
-$conn->query("INSERT INTO view_log (escort_id) VALUES ($id)");
+$conn->query("INSERT INTO view_log (escort_id) VALUES ($id)"); // Corrigido
 
 $stmt = $conn->prepare("SELECT photo_path, is_highlighted FROM photos WHERE escort_id = ? ORDER BY is_highlighted DESC");
 $stmt->bind_param("i", $id);
@@ -41,7 +41,9 @@ $reviews = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         .gallery-inner { display: flex; transition: transform 0.3s ease; }
         .gallery-item { flex: 0 0 100px; margin-right: 10px; }
         .gallery-item img { width: 100%; height: auto; border-radius: 5px; }
+        #map { height: 200px; width: 100%; border-radius: 8px; }
     </style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY"></script>
 </head>
 <body>
     <div class="top-bar">
@@ -102,6 +104,13 @@ $reviews = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                 </div>
             <?php endif; ?>
 
+            <?php if ($escort['latitude'] && $escort['longitude']): ?>
+                <div class="profile-section-card">
+                    <h3>Localização</h3>
+                    <div id="map"></div>
+                </div>
+            <?php endif; ?>
+
             <div class="profile-section-card">
                 <h3>Avaliações</h3>
                 <?php if (empty($reviews)): ?>
@@ -146,8 +155,20 @@ $reviews = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
         function updateGallery() {
             const galleryInner = document.getElementById('gallery-inner');
-            const offset = -galleryIndex * 110; // 100px width + 10px margin
+            const offset = -galleryIndex * 110;
             galleryInner.style.transform = `translateX(${offset}px)`;
+        }
+
+        function initMap() {
+            const location = { lat: <?php echo $escort['latitude']; ?>, lng: <?php echo $escort['longitude']; ?> };
+            const map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 12,
+                center: location
+            });
+            new google.maps.Marker({
+                position: location,
+                map: map
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -156,6 +177,9 @@ $reviews = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                 backToTop.style.display = window.scrollY > 300 ? 'block' : 'none';
             });
             updateGallery();
+            <?php if ($escort['latitude'] && $escort['longitude']): ?>
+                initMap();
+            <?php endif; ?>
         });
     </script>
 </body>

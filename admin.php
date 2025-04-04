@@ -17,6 +17,7 @@ $filter_type = isset($_GET['filter_type']) ? trim($_GET['filter_type']) : '';
 $filter_online = isset($_GET['filter_online']) ? (int)$_GET['filter_online'] : -1;
 $filter_search = isset($_GET['filter_search']) ? trim($_GET['filter_search']) : '';
 $filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min'] : 0;
+$filter_tag = isset($_GET['filter_tag']) ? trim($_GET['filter_tag']) : '';
 $export_category = isset($_POST['export_category']) ? (int)$_POST['export_category'] : 0;
 
 $where = [];
@@ -41,6 +42,11 @@ if ($filter_views_min > 0) {
     $where[] = "e.views >= ?";
     $params[] = $filter_views_min;
     $types .= 'i';
+}
+if (!empty($filter_tag)) {
+    $where[] = "e.tags LIKE ?";
+    $params[] = '%' . $filter_tag . '%';
+    $types .= 's';
 }
 $where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
@@ -70,7 +76,8 @@ $stats = $conn->query("SELECT
     (SELECT COUNT(*) FROM escorts WHERE type = 'acompanhante') as acompanhantes,
     (SELECT COUNT(*) FROM escorts WHERE type = 'criadora') as pornstars,
     (SELECT SUM(views) FROM escorts) as total_views,
-    (SELECT COUNT(*) FROM favorites WHERE admin_id = " . (int)$_SESSION['user_id'] . ") as favorites")->fetch_assoc();
+    (SELECT COUNT(*) FROM favorites WHERE admin_id = " . (int)$_SESSION['user_id'] . ") as favorites,
+    (SELECT COUNT(*) FROM messages WHERE receiver_id = " . (int)$_SESSION['user_id'] . " AND is_read = 0) as unread_messages")->fetch_assoc();
 
 if (!empty($filter_search)) {
     $stmt = $conn->prepare("INSERT INTO search_log (admin_id, query) VALUES (?, ?)");
@@ -79,25 +86,6 @@ if (!empty($filter_search)) {
 }
 
 $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fetch_all(MYSQLI_ASSOC);
-
-// Moderação em lote
-if (isset($_POST['moderate_photos'])) {
-    $photo_ids = isset($_POST['photo_ids']) ? array_map('intval', $_POST['photo_ids']) : [];
-    $action = $_POST['action'];
-    if (!empty($photo_ids) && in_array($action, ['approve', 'reject'])) {
-        $status = $action === 'approve' ? 'approved' : 'rejected';
-        $placeholders = implode(',', array_fill(0, count($photo_ids), '?'));
-        $stmt = $conn->prepare("INSERT INTO photo_moderation (photo_id, status) VALUES (?, '$status') 
-                                ON DUPLICATE KEY UPDATE status = '$status', moderated_at = CURRENT_TIMESTAMP");
-        foreach ($photo_ids as $photo_id) {
-            $stmt->bind_param("i", $photo_id);
-            $stmt->execute();
-        }
-        $message = "Fotos moderadas com sucesso!";
-    } else {
-        $error = "Selecione pelo menos uma foto e uma ação válida.";
-    }
-}
 
 $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.status 
                         FROM photos p 
@@ -116,16 +104,8 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .admin-table th, .admin-table td { padding: 10px; text-align: left; }
-        .filter-form { display: flex; gap: 10px; margin-bottom: 20px; }
-        .favorite-btn { background: #E95B95; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .favorite-btn:hover { background: #F6ECB2; color: #333; }
-        .highlight-btn { background: #28A745; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .highlight-btn:hover { background: #F6ECB2; color: #333; }
-        .stats { margin-bottom: 20px; }
-        #views-chart, #tags-chart, #search-chart { max-width: 600px; margin: 20px 0; }
-        .export-form { margin: 10px 0; display: flex; gap: 10px; }
-        .photo-moderation img { max-width: 100px; }
+        .dashboard-widgets { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
+        .widget { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); flex: 1; min-width: 200px; }
     </style>
 </head>
 <body>
@@ -137,6 +117,8 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
             <a href="index.php">Home</a>
             <a href="report.php">Relatórios</a>
             <a href="manage_categories.php">Categorias</a>
+            <a href="view_logs.php">Logs</a>
+            <a href="messages.php">Mensagens (<?php echo $stats['unread_messages']; ?>)</a>
             <a href="logout.php">Sair</a>
         </div>
     </div>
@@ -145,13 +127,23 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
         <div class="main-content">
             <h3>Bem-vindo, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h3>
 
-            <section class="stats">
-                <h2>Estatísticas</h2>
-                <p>Acompanhantes: <?php echo $stats['acompanhantes']; ?></p>
-                <p>Pornstars: <?php echo $stats['pornstars']; ?></p>
-                <p>Total de Visualizações: <?php echo $stats['total_views']; ?></p>
-                <p>Favoritos: <?php echo $stats['favorites']; ?></p>
-                <canvas id="views-chart"></canvas>
+            <section class="dashboard-widgets">
+                <div class="widget">
+                    <h4>Acompanhantes</h4>
+                    <p><?php echo $stats['acompanhantes']; ?></p>
+                </div>
+                <div class="widget">
+                    <h4>Pornstars</h4>
+                    <p><?php echo $stats['pornstars']; ?></p>
+                </div>
+                <div class="widget">
+                    <h4>Total de Visualizações</h4>
+                    <p><?php echo $stats['total_views']; ?></p>
+                </div>
+                <div class="widget">
+                    <h4>Favoritos</h4>
+                    <p><?php echo $stats['favorites']; ?></p>
+                </div>
             </section>
 
             <section id="escorts">
@@ -188,6 +180,7 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
                         <option value="0" <?php echo $filter_online === 0 ? 'selected' : ''; ?>>Offline</option>
                     </select>
                     <input type="number" name="filter_views_min" value="<?php echo $filter_views_min; ?>" placeholder="Views mínimas">
+                    <input type="text" name="filter_tag" value="<?php echo htmlspecialchars($filter_tag); ?>" placeholder="Tag (ex: loira)">
                     <button type="submit" class="search-btn">Filtrar</button>
                 </form>
                 <table class="admin-table">
@@ -225,7 +218,7 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
                 </table>
                 <div class="pagination">
                     <?php for ($i = 1; $i <= $total_pages_escorts; $i++): ?>
-                        <a href="?page_escorts=<?php echo $i; ?>&filter_type=<?php echo urlencode($filter_type); ?>&filter_online=<?php echo $filter_online; ?>&filter_search=<?php echo urlencode($filter_search); ?>&filter_views_min=<?php echo $filter_views_min; ?>" class="<?php echo $i === $page_escorts ? 'active' : ''; ?>"><?php echo $i; ?></a>
+                        <a href="?page_escorts=<?php echo $i; ?>&filter_type=<?php echo urlencode($filter_type); ?>&filter_online=<?php echo $filter_online; ?>&filter_search=<?php echo urlencode($filter_search); ?>&filter_views_min=<?php echo $filter_views_min; ?>&filter_tag=<?php echo urlencode($filter_tag); ?>" class="<?php echo $i === $page_escorts ? 'active' : ''; ?>"><?php echo $i; ?></a>
                     <?php endfor; ?>
                 </div>
             </section>
@@ -262,8 +255,6 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
                     <button type="submit" name="moderate_photos" class="load-more">Aplicar</button>
                 </form>
             </section>
-
-            <!-- Outras seções (edit_log, view_log, search_log, tags-report) permanecem iguais -->
         </div>
     </div>
 
@@ -323,8 +314,6 @@ $photos = $conn->query("SELECT p.id, p.photo_path, e.name as escort_name, pm.sta
             const selectAll = document.getElementById('select-all');
             checkboxes.forEach(cb => cb.checked = selectAll.checked);
         }
-
-        // Outros scripts (exportCSV, importCSV, gráficos) permanecem iguais
     </script>
 </body>
 </html>
