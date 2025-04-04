@@ -10,11 +10,14 @@ $offset = ($page - 1) * $items_per_page;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $category = isset($_GET['category']) ? (int)$_GET['category'] : 0;
+$availability = isset($_GET['availability']) ? trim($_GET['availability']) : '';
+$language = isset($_GET['language']) ? trim($_GET['language']) : '';
 $order = in_array($_GET['order'] ?? '', ['views', 'name', 'distance']) ? $_GET['order'] : 'views';
 $age_min = isset($_GET['age_min']) ? (int)$_GET['age_min'] : 0;
 $views_min = isset($_GET['views_min']) ? (int)$_GET['views_min'] : 0;
 $lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 0;
 $lon = isset($_GET['lon']) ? (float)$_GET['lon'] : 0;
+$radius = isset($_GET['radius']) ? (float)$_GET['radius'] : 50;
 
 $where = [];
 $params = [];
@@ -37,6 +40,16 @@ if ($category > 0) {
     $params[] = $category;
     $types .= 'i';
 }
+if (!empty($availability)) {
+    $where[] = "e.availability LIKE ?";
+    $params[] = '%' . $availability . '%';
+    $types .= 's';
+}
+if (!empty($language)) {
+    $where[] = "e.languages LIKE ?";
+    $params[] = '%' . $language . '%';
+    $types .= 's';
+}
 if ($age_min > 0) {
     $where[] = "e.age >= ?";
     $params[] = $age_min;
@@ -46,6 +59,14 @@ if ($views_min > 0) {
     $where[] = "e.views >= ?";
     $params[] = $views_min;
     $types .= 'i';
+}
+if ($lat && $lon && $radius) {
+    $where[] = "(6371 * acos(cos(radians(?)) * cos(radians(e.latitude)) * cos(radians(e.longitude) - radians(?)) + sin(radians(?)) * sin(radians(e.latitude)))) <= ?";
+    $params[] = $lat;
+    $params[] = $lon;
+    $params[] = $lat;
+    $params[] = $radius;
+    $types .= 'dddd';
 }
 $base_where_clause = $where ? "WHERE " . implode(' AND ', $where) : '';
 
@@ -72,22 +93,11 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eskort - Banco de Dados de Pornstars e Acompanhantes</title>
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
-    <style>
-        .suggestions { position: absolute; background: #fff; border: 1px solid #B4D1EC; border-radius: 5px; max-height: 200px; overflow-y: auto; width: 250px; z-index: 1000; display: none; }
-        .suggestions div { padding: 8px; cursor: pointer; }
-        .suggestions div:hover { background: #F6ECB2; }
-        #loading { text-align: center; padding: 20px; display: none; color: #E95B95; }
-        .top-bar { justify-content: center; }
-        .top-center { flex-grow: 1; max-width: 1200px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        #notification { position: fixed; top: 60px; right: 20px; background: #E95B95; color: white; padding: 10px; border-radius: 5px; display: none; z-index: 1000; }
-        .similar-profiles { margin-top: 20px; }
-        .profile-preview p { margin: 5px 0; }
-    </style>
 </head>
 <body>
     <div class="top-bar">
         <div class="top-center">
-            <h2 style="color: #E95B95; margin: 0;">Eskort</h2>
+            <h2>Eskort</h2>
             <div style="position: relative; flex-grow: 1;">
                 <input type="text" id="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="Busque por nome..." onkeyup="suggest(this.value, 'search')">
                 <div id="search-suggestions" class="suggestions"></div>
@@ -104,6 +114,8 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
                     </option>
                 <?php endforeach; ?>
             </select>
+            <input type="text" id="availability-filter" value="<?php echo htmlspecialchars($availability); ?>" placeholder="Disponibilidade (ex: Seg-Sex)">
+            <input type="text" id="language-filter" value="<?php echo htmlspecialchars($language); ?>" placeholder="Idioma (ex: Português)">
             <select id="order-filter">
                 <option value="views" <?php echo $order === 'views' ? 'selected' : ''; ?>>Mais Vistos</option>
                 <option value="name" <?php echo $order === 'name' ? 'selected' : ''; ?>>Nome</option>
@@ -111,7 +123,8 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
             </select>
             <input type="number" id="age-min-filter" value="<?php echo $age_min; ?>" placeholder="Idade Mínima" min="18" style="width: 100px;">
             <input type="number" id="views-min-filter" value="<?php echo $views_min; ?>" placeholder="Views Mínimos" min="0" style="width: 100px;">
-            <button onclick="filterProfiles()" class="search-btn">🔍</button>
+            <input type="number" id="radius-filter" value="<?php echo $radius; ?>" placeholder="Raio (km)" min="1" style="width: 100px;">
+            <button onclick="filterProfiles()">🔍</button>
             <button onclick="getUserLocation()" class="geo-btn">📍 Perto de Mim</button>
         </div>
     </div>
@@ -265,7 +278,7 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
         let totalPages = <?php echo $total_pages; ?>;
         let lat = <?php echo $lat; ?>;
         let lon = <?php echo $lon; ?>;
-        const ws = new WebSocket('ws://localhost:8080'); // Configure um servidor WebSocket
+        const ws = new WebSocket('ws://localhost:8080');
 
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
@@ -281,10 +294,13 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
             const search = document.getElementById('search-input').value;
             const keyword = document.getElementById('keyword-input').value;
             const category = document.getElementById('category-filter').value;
+            const availability = document.getElementById('availability-filter').value;
+            const language = document.getElementById('language-filter').value;
             const order = document.getElementById('order-filter').value;
             const ageMin = document.getElementById('age-min-filter').value;
             const viewsMin = document.getElementById('views-min-filter').value;
-            window.location.href = `?search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}`;
+            const radius = document.getElementById('radius-filter').value;
+            window.location.href = `?search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
         }
 
         function suggest(query, type) {
@@ -319,10 +335,13 @@ $categories = $conn->query("SELECT id, name FROM categories ORDER BY name")->fet
             const search = document.getElementById('search-input').value;
             const keyword = document.getElementById('keyword-input').value;
             const category = document.getElementById('category-filter').value;
+            const availability = document.getElementById('availability-filter').value;
+            const language = document.getElementById('language-filter').value;
             const order = document.getElementById('order-filter').value;
             const ageMin = document.getElementById('age-min-filter').value;
             const viewsMin = document.getElementById('views-min-filter').value;
-            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}`;
+            const radius = document.getElementById('radius-filter').value;
+            const url = `load_more.php?page=${page + 1}&search=${encodeURIComponent(search)}&keyword=${encodeURIComponent(keyword)}&category=${category}&availability=${encodeURIComponent(availability)}&language=${encodeURIComponent(language)}&order=${order}&age_min=${ageMin}&views_min=${viewsMin}&lat=${lat}&lon=${lon}&radius=${radius}`;
 
             const cached = localStorage.getItem(url);
             if (cached) {

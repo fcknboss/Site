@@ -45,7 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'views' => (int)$_POST['views'] ?? 0,
         'latitude' => (float)$_POST['latitude'] ?? 0,
         'longitude' => (float)$_POST['longitude'] ?? 0,
-        'tags' => filter_input(INPUT_POST, 'tags', FILTER_SANITIZE_STRING)
+        'tags' => filter_input(INPUT_POST, 'tags', FILTER_SANITIZE_STRING),
+        'video_url' => $escort ? $escort['video_url'] : ''
     ];
 
     if (empty($data['name'])) {
@@ -63,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $profile_photo_name = time() . '_' . basename($_FILES["profile_photo"]["name"]);
             $target_file = $target_dir . $profile_photo_name;
             $image_info = getimagesize($_FILES["profile_photo"]["tmp_name"]);
-            if ($image_info && $_FILES["profile_photo"]["size"] <= 5 * 1024 * 1024) { // Max 5MB
+            if ($image_info && $_FILES["profile_photo"]["size"] <= 5 * 1024 * 1024) {
                 if (move_uploaded_file($_FILES["profile_photo"]["tmp_name"], $target_file)) {
                     $data['profile_photo'] = $target_file;
                 } else {
@@ -83,8 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $image_info = getimagesize($tmp_name);
                     if ($image_info && $_FILES["additional_photos"]["size"][$key] <= 5 * 1024 * 1024) {
                         if (move_uploaded_file($tmp_name, $photo_file)) {
-                            $stmt = $conn->prepare("INSERT INTO photos (escort_id, photo_path) VALUES (?, ?)");
-                            $stmt->bind_param("is", $escort_id ?? $id, $photo_file);
+                            $is_highlighted = isset($_POST['highlight']) && $_POST['highlight'] == $key ? 1 : 0;
+                            $stmt = $conn->prepare("INSERT INTO photos (escort_id, photo_path, is_highlighted) VALUES (?, ?, ?)");
+                            $stmt->bind_param("isi", $escort_id ?? $id, $photo_file, $is_highlighted);
                             $stmt->execute();
                             $photo_ids[] = $conn->insert_id;
                         } else {
@@ -99,6 +101,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if (!empty($_FILES['video']['name']) && !$error) {
+            $video_name = time() . '_' . basename($_FILES["video"]["name"]);
+            $video_file = $target_dir . $video_name;
+            $video_type = mime_content_type($_FILES["video"]["tmp_name"]);
+            if (in_array($video_type, ['video/mp4', 'video/webm']) && $_FILES["video"]["size"] <= 50 * 1024 * 1024) { // Máx 50MB
+                if (move_uploaded_file($_FILES["video"]["tmp_name"], $video_file)) {
+                    $data['video_url'] = $video_file;
+                } else {
+                    $error = "Erro ao fazer upload do vídeo.";
+                }
+            } else {
+                $error = "Vídeo inválido ou muito grande (máx. 50MB, apenas MP4/WebM).";
+            }
+        }
+
         if (!$error) {
             $text = implode(' ', [$data['description'], $data['services'], $data['physical_traits'], $data['tags']]);
             $suggested_tags = array_unique(array_filter(array_map('trim', explode(',', strtolower($text))), function($tag) {
@@ -106,16 +123,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }));
 
             if ($id > 0) {
-                $query = "UPDATE escorts SET user_id = ?, name = ?, age = ?, description = ?, services = ?, rates = ?, availability = ?, profile_photo = ?, type = ?, is_online = ?, physical_traits = ?, phone = ?, height = ?, weight = ?, languages = ?, views = ?, latitude = ?, longitude = ?, tags = ? WHERE id = ?";
+                $query = "UPDATE escorts SET user_id = ?, name = ?, age = ?, description = ?, services = ?, rates = ?, availability = ?, profile_photo = ?, type = ?, is_online = ?, physical_traits = ?, phone = ?, height = ?, weight = ?, languages = ?, views = ?, latitude = ?, longitude = ?, tags = ?, video_url = ? WHERE id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("isissssssisssididdsi", $data['user_id'], $data['name'], $data['age'], $data['description'], $data['services'], $data['rates'], $data['availability'], $data['profile_photo'], $data['type'], $data['is_online'], $data['physical_traits'], $data['phone'], $data['height'], $data['weight'], $data['languages'], $data['views'], $data['latitude'], $data['longitude'], $data['tags'], $id);
+                $stmt->bind_param("isissssssisssididdssi", $data['user_id'], $data['name'], $data['age'], $data['description'], $data['services'], $data['rates'], $data['availability'], $data['profile_photo'], $data['type'], $data['is_online'], $data['physical_traits'], $data['phone'], $data['height'], $data['weight'], $data['languages'], $data['views'], $data['latitude'], $data['longitude'], $data['tags'], $data['video_url'], $id);
                 $action = 'update';
                 $escort_id = $id;
             } else {
-                $query = "INSERT INTO escorts (user_id, name, age, description, services, rates, availability, profile_photo, type, is_online, physical_traits, phone, height, weight, languages, views, latitude, longitude, tags) 
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $query = "INSERT INTO escorts (user_id, name, age, description, services, rates, availability, profile_photo, type, is_online, physical_traits, phone, height, weight, languages, views, latitude, longitude, tags, video_url) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("isissssssisssididds", $data['user_id'], $data['name'], $data['age'], $data['description'], $data['services'], $data['rates'], $data['availability'], $data['profile_photo'], $data['type'], $data['is_online'], $data['physical_traits'], $data['phone'], $data['height'], $data['weight'], $data['languages'], $data['views'], $data['latitude'], $data['longitude'], $data['tags']);
+                $stmt->bind_param("isissssssisssididdss", $data['user_id'], $data['name'], $data['age'], $data['description'], $data['services'], $data['rates'], $data['availability'], $data['profile_photo'], $data['type'], $data['is_online'], $data['physical_traits'], $data['phone'], $data['height'], $data['weight'], $data['languages'], $data['views'], $data['latitude'], $data['longitude'], $data['tags'], $data['video_url']);
                 $action = 'create';
             }
 
@@ -125,10 +142,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt_log = $conn->prepare("INSERT INTO edit_log (admin_id, escort_id, action) VALUES (?, ?, ?)");
                 $stmt_log->bind_param("iis", $admin_id, $escort_id, $action);
                 $stmt_log->execute();
-
-                // Notificação via WebSocket (simulada)
-                $ws_message = json_encode(['type' => 'new_profile', 'name' => $data['name']]);
-                // Aqui você enviaria $ws_message para o servidor WebSocket, se configurado
 
                 header("Location: admin.php#escorts");
                 exit;
@@ -140,6 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $users = $conn->query("SELECT id, username FROM users WHERE role IN ('escort', 'admin') ORDER BY username")->fetch_all(MYSQLI_ASSOC);
+$existing_photos = $id > 0 ? $conn->query("SELECT id, photo_path, is_highlighted FROM photos WHERE escort_id = $id")->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 
 <!DOCTYPE html>
@@ -210,7 +224,24 @@ $users = $conn->query("SELECT id, username FROM users WHERE role IN ('escort', '
                 <div class="form-group">
                     <label for="additional_photos">Fotos Adicionais:</label>
                     <input type="file" id="additional_photos" name="additional_photos[]" accept="image/*" multiple onchange="previewPhotos(this)">
-                    <div id="additional-previews" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;"></div>
+                    <div id="additional-previews" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                        <?php foreach ($existing_photos as $index => $photo): ?>
+                            <div>
+                                <img src="<?php echo htmlspecialchars($photo['photo_path']); ?>" style="max-width: 100px;">
+                                <label><input type="radio" name="highlight" value="<?php echo $index; ?>" <?php echo $photo['is_highlighted'] ? 'checked' : ''; ?>> Destaque</label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="video">Vídeo:</label>
+                    <input type="file" id="video" name="video" accept="video/mp4,video/webm" onchange="previewVideo(this, 'video-preview')">
+                    <?php if ($escort && $escort['video_url']): ?>
+                        <video id="video-preview" controls style="max-width: 400px; margin-top: 10px;">
+                            <source src="<?php echo htmlspecialchars($escort['video_url']); ?>" type="video/mp4">
+                            Seu navegador não suporta vídeos.
+                        </video>
+                    <?php endif; ?>
                 </div>
                 <div class="form-group">
                     <label for="type">Tipo:</label>
@@ -308,20 +339,40 @@ $users = $conn->query("SELECT id, username FROM users WHERE role IN ('escort', '
         function previewPhotos(input) {
             const previews = document.getElementById('additional-previews');
             previews.innerHTML = '';
-            Array.from(input.files).forEach(file => {
+            Array.from(input.files).forEach((file, index) => {
                 if (file.size <= 5 * 1024 * 1024) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
-                        const img = document.createElement('img');
-                        img.src = e.target.result;
-                        img.style.maxWidth = '100px';
-                        previews.appendChild(img);
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <img src="${e.target.result}" style="max-width: 100px;">
+                            <label><input type="radio" name="highlight" value="${index}"> Destaque</label>
+                        `;
+                        previews.appendChild(div);
                     };
                     reader.readAsDataURL(file);
                 } else {
                     alert('Foto ' + file.name + ' é muito grande (máx. 5MB).');
                 }
             });
+        }
+
+        function previewVideo(input, previewId) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const video = document.getElementById(previewId) || document.createElement('video');
+                    video.id = previewId;
+                    video.controls = true;
+                    video.style.maxWidth = '400px';
+                    video.style.marginTop = '10px';
+                    video.innerHTML = `<source src="${e.target.result}" type="${input.files[0].type}">Seu navegador não suporta vídeos.`;
+                    if (!document.getElementById(previewId)) {
+                        input.parentNode.appendChild(video);
+                    }
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
         }
 
         function suggestTags() {
