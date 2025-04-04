@@ -9,6 +9,64 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 
 $conn = getDBConnection();
 
+// Função para verificar a integridade do banco de dados
+function checkDatabaseIntegrity($conn) {
+    $required_tables = [
+        'escorts' => ['id', 'user_id', 'name', 'age', 'type', 'is_online', 'views', 'latitude', 'longitude', 'tags'],
+        'users' => ['id', 'username', 'role'],
+        'favorites' => ['id', 'admin_id', 'escort_id', 'is_public'],
+        'messages' => ['id', 'receiver_id', 'is_read'],
+        'schedules' => ['id', 'status'],
+        'photos' => ['id', 'escort_id', 'photo_path'],
+        'photo_moderation' => ['photo_id', 'status'],
+        'search_log' => ['id', 'admin_id', 'query'],
+        'categories' => ['id', 'name']
+    ];
+
+    $errors = [];
+
+    foreach ($required_tables as $table => $columns) {
+        // Verifica se a tabela existe
+        $result = $conn->query("SHOW TABLES LIKE '$table'");
+        if ($result->num_rows == 0) {
+            $errors[] = "Tabela '$table' não existe.";
+            continue;
+        }
+
+        // Verifica as colunas
+        $result = $conn->query("SHOW COLUMNS FROM $table");
+        $existing_columns = [];
+        while ($row = $result->fetch_assoc()) {
+            $existing_columns[] = $row['Field'];
+        }
+
+        foreach ($columns as $column) {
+            if (!in_array($column, $existing_columns)) {
+                $errors[] = "Coluna '$column' não existe na tabela '$table'.";
+            }
+        }
+    }
+
+    return empty($errors) ? true : $errors;
+}
+
+// Executa a verificação
+$db_check = checkDatabaseIntegrity($conn);
+if ($db_check !== true) {
+    echo "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><title>Erro no Banco de Dados</title>";
+    echo "<style>body { font-family: Arial, sans-serif; background: #F6ECB2; color: #333; padding: 20px; }";
+    echo ".error-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 0 auto; }";
+    echo "h1 { color: #E95B95; } ul { list-style: none; padding: 0; } li { margin: 10px 0; }</style></head>";
+    echo "<body><div class='error-box'><h1>Erro no Banco de Dados</h1><p>O banco de dados está incompleto. Corrija os seguintes problemas:</p>";
+    echo "<ul>";
+    foreach ($db_check as $error) {
+        echo "<li>$error</li>";
+    }
+    echo "</ul><p>Por favor, crie as tabelas e colunas necessárias no phpMyAdmin e tente novamente.</p></div></body></html>";
+    exit;
+}
+
+// Prossegue com o código se o banco estiver OK
 $items_per_page = 10;
 $page_escorts = isset($_GET['page_escorts']) ? max(1, (int)$_GET['page_escorts']) : 1;
 $offset_escorts = ($page_escorts - 1) * $items_per_page;
@@ -16,9 +74,9 @@ $offset_escorts = ($page_escorts - 1) * $items_per_page;
 $filter_type = isset($_GET['filter_type']) ? trim($_GET['filter_type']) : '';
 $filter_online = isset($_GET['filter_online']) ? (int)$_GET['filter_online'] : -1;
 $filter_search = isset($_GET['filter_search']) ? trim($_GET['filter_search']) : '';
-$filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min'] : 0;
+$filter_views_min = isset($_GET['filter_views_min']) ? (int)$_GET['filter_views_min']) : 0;
 $filter_tag = isset($_GET['filter_tag']) ? trim($_GET['filter_tag']) : '';
-$export_category = isset($_POST['export_category']) ? (int)$_POST['export_category'] : 0;
+$export_category = isset($_POST['export_category']) ? (int)$_POST['export_category']) : 0;
 
 $where = [];
 $params = [];
@@ -87,7 +145,6 @@ function getEscorts($conn, $offset, $limit, $where_clause, $types, $params) {
 
 $escorts = getEscorts($conn, $offset_escorts, $items_per_page, $where_clause, $types, $params);
 
-// Otimiza a query de stats
 $stats_query = "SELECT 
     COUNT(CASE WHEN e.type = 'acompanhante' THEN 1 END) as acompanhantes,
     COUNT(CASE WHEN e.type = 'criadora' THEN 1 END) as pornstars,
